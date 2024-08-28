@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "django-flex-menus"
+version = "0.1.0"
+description = "Flexible site menus for Django"
+authors = ["Sam <samuel.scott.jennings@gmail.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "django_flex_menus"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+anytree = "^2.12.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
