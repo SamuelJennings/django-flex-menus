@@ -5,7 +5,7 @@ description = "Flexible site menus for Django"
 authors = ["Sam <samuel.scott.jennings@gmail.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "flex_menu"}]
+packages = [{include = "flex_menu" }]
 
 [tool.poetry.dependencies]
 python = ">=3.1,<4.0"
