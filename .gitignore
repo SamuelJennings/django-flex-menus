@@ -1,0 +1,63 @@
+# Temporary and binary files
+*~
+*.ruff_cache
+*.mypy_cache
+*.py[cod]
+*.so
+*.cfg
+!.isort.cfg
+!setup.cfg
+*.orig
+*.log
+*.pot
+**/__pycache__
+.cache/*
+.*.swp
+*/.ipynb_checkpoints/*
+.DS_Store
+
+# Unittest and coverage
+htmlcov
+.coverage
+.coverage.*
+.tox
+junit*.xml
+coverage.xml
+.pytest_cache/
+
+# Build and docs folder/files
+build/*
+dist/*
+sdist/*
+docs/_rst/*
+docs/_build/*
+cover/*
+MANIFEST
+
+# Per-project virtualenvs
+.venv*/
+.conda*/
+.python-version
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+media/
+/static/
+/*.sqlite3
+
+# */static/vendor/*
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+dist
+
