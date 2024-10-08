@@ -7,9 +7,21 @@ from django.urls.exceptions import NoReverseMatch
 
 
 class BaseMenu(Node):
-    def __init__(self, name: str, parent=None, children=None, **kwargs):
+    def __init__(
+        self,
+        name: str,
+        parent=None,
+        children=None,
+        check=None,
+        resolve_url=None,
+        **kwargs,
+    ):
         super().__init__(name, parent=parent, children=children, **kwargs)
         self.label = kwargs.get("label", name)
+        if check is not None:
+            self.check = check
+        if resolve_url is not None:
+            self.resolve_url = resolve_url
 
     def __str__(self):
         return f"{self.__class__.__name__}(name={self.name})"
@@ -60,11 +72,11 @@ class BaseMenu(Node):
     def render(self):
         return RenderTree(self).by_attr("name")
 
-    def process(self, request):
-        # if we're not visible we return since we don't need to do anymore processing
-        self.check(request)
-        if not self.visible:
-            return
+    def process(self, request, **kwargs):
+        # first check whether the menu is visible
+        self.visible = (
+            self.check(request, **kwargs) if callable(self.check) else self.check
+        )
 
     def match_url(self, request):
         """
@@ -93,16 +105,26 @@ class MenuItem(BaseMenu):
 
         super().__init__(name, *args, **kwargs)
 
+    def process(self, request, **kwargs):
+        super().process(request, **kwargs)
+
+        # if the menu is visible, make sure the url is resolvable
+        self.url = self.resolve_url(request, **kwargs)
+        if self.url is not None:
+            self.visible = True
+            self.match_url(request)
+
     def resolve_url(self, request, *args, **kwargs):
         if self.view_name:
             with suppress(NoReverseMatch):
-                return reverse(self.view_name, *args, **kwargs)
+                return reverse(self.view_name, args=args, kwargs=kwargs)
         elif self.url and callable(self.url):
             return self.url(request, *args, **kwargs)
         else:
             return self.url
 
-    def check(self, request):
+    def check(self, request, **kwargs):
+        # return True
         self.url = self.resolve_url(request)
         if self.url is not None:
             self.visible = True
@@ -119,7 +141,14 @@ class Menu(BaseMenu):
             parent = root
         super().__init__(name, parent, children, **kwargs)
 
-    def check(self, request):
+    def process(self, request, **kwargs):
+        # first check whether the menu is visible
+        super().process(request, **kwargs)
+        for child in self.children:
+            child.process(request, **kwargs)
+
+    def check(self, request, **kwargs):
+        # return True
         self.visible = any([child.check(request) for child in self.children])
         return self.visible
 
