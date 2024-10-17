@@ -42,14 +42,19 @@ class BaseMenu(Node):
         for child in children:
             child.parent = self
 
-    def add_child(self, child, position=None):
-        children = list(self.children)
+    def add_children(self, children, position=None):
+        if not isinstance(children, list):
+            children = list(children)
 
         if position is None:
             position = len(children)
 
-        children.insert(position, child)
-        self.children = children
+        old = list(self.children)
+
+        new = old[:position] + children + old[position:]
+
+        # children.insert(position, child)
+        self.children = new
 
     def insert_after(self, child, named: str):
         if isinstance(child, Menu) or isinstance(child, MenuItem):
