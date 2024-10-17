@@ -95,7 +95,7 @@ class BaseMenu(Node):
         return self.selected
 
 
-root = BaseMenu(name="RootMenu")
+root = BaseMenu(name="DjangoFlexMenu")
 
 
 class MenuItem(BaseMenu):
