@@ -1,3 +1,4 @@
+import copy
 import re
 from contextlib import suppress
 
@@ -53,7 +54,6 @@ class BaseMenu(Node):
 
         new = old[:position] + children + old[position:]
 
-        # children.insert(position, child)
         self.children = new
 
     def insert_after(self, child, named: str):
@@ -93,6 +93,9 @@ class BaseMenu(Node):
         ):
             self.selected = True
         return self.selected
+
+    def copy(self):
+        return copy.deepcopy(self)
 
 
 root = BaseMenu(name="DjangoFlexMenu")
