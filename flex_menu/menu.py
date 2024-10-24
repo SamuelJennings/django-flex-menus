@@ -45,10 +45,13 @@ class BaseMenu(Node):
 
     def add_children(self, children, position=None):
         if not isinstance(children, list):
-            children = list(children)
+            children = [children]
+
+        # for child in children:
+        #     child.parent = self
 
         if position is None:
-            position = len(children)
+            position = len(self.children)
 
         old = list(self.children)
 
