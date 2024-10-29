@@ -10,7 +10,8 @@ register = template.Library()
 @register.simple_tag(takes_context=True)
 def process_menu(context, menu, **kwargs):
     request = context["request"]
-    menu = root.get(menu)
+    if isinstance(menu, str):
+        menu = root.get(menu)
     menu.process(request, **kwargs)
     return menu
 
