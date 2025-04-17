@@ -1,5 +1,4 @@
 import copy
-import re
 from contextlib import suppress
 from typing import Callable, List, Optional, Union
 
@@ -174,10 +173,7 @@ class BaseMenu(Node):
         Returns:
             bool: True if the URL matches the request path, False otherwise.
         """
-        self.selected = bool(
-            re.match(f"{self.url}$", request.path)
-            or re.match(f"{self.url}", request.path)
-        )
+        self.selected = self.url == request.path
         return self.selected
 
     def copy(self) -> "BaseMenu":
