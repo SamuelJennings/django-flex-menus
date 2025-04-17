@@ -1,6 +1,7 @@
 import copy
 from contextlib import suppress
 from typing import Callable, List, Optional, Union
+from urllib.parse import urlencode
 
 from anytree import Node, RenderTree, search
 from django.urls import reverse
@@ -191,10 +192,12 @@ root = BaseMenu(name="DjangoFlexMenu")
 class MenuItem(BaseMenu):
     template = "menu/item.html"
 
-    def __init__(self, name: str, view_name="", url="", *args, **kwargs):
+    def __init__(
+        self, name: str, view_name="", url="", params: dict = None, *args, **kwargs
+    ):
         if not url and not view_name:
             raise ValueError("Either a url or view_name must be provided")
-
+        self.params = params or {}
         self.view_name = view_name
         self.url = url
 
@@ -217,9 +220,15 @@ class MenuItem(BaseMenu):
     def resolve_url(self, request, *args, **kwargs):
         if self.view_name:
             with suppress(NoReverseMatch):
-                return reverse(self.view_name, args=args, kwargs=kwargs)
+                self.url = reverse(self.view_name, args=args, kwargs=kwargs)
+
         elif self.url and callable(self.url):
-            return self.url(request, *args, **kwargs)
+            self.url = self.url(request, *args, **kwargs)
+
+        if self.url and self.params:
+            query_string = urlencode(self.params)
+            self.url = self.url + ("&" if "?" in self.url else "?") + query_string
+
         return self.url
 
 
