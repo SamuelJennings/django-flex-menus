@@ -4,6 +4,7 @@ from typing import Callable, List, Optional, Union
 from urllib.parse import urlencode
 
 from anytree import Node, RenderTree, search
+from django.core.handlers.wsgi import WSGIRequest
 from django.urls import reverse
 from django.urls.exceptions import NoReverseMatch
 
@@ -19,6 +20,8 @@ class BaseMenu(Node):
         visible (bool): Whether the menu is visible, determined during processing.
         selected (bool): Whether the menu item matches the current request path.
     """
+
+    request: WSGIRequest
 
     def __init__(
         self,
@@ -42,8 +45,7 @@ class BaseMenu(Node):
         """
         super().__init__(name, parent=parent, children=children, **kwargs)
         self.label = kwargs.get("label", name)
-        if check is not None:
-            self.check = check
+        self._check = check
         if resolve_url is not None:
             self.resolve_url = resolve_url
 
@@ -154,18 +156,32 @@ class BaseMenu(Node):
         """
         return RenderTree(self).by_attr("name")
 
-    def process(self, request, **kwargs) -> None:
+    def process(self, request, instance, **kwargs) -> None:
         """Processes the visibility of the menu based on a request.
 
         Args:
             request: The HTTP request object.
             **kwargs: Additional arguments for the check function.
         """
-        self.visible = (
-            self.check(request, **kwargs) if callable(self.check) else self.check
-        )
+        self.request = request
+        self.instance = instance
+        self.visible = self.check(self.request, self.instance, **kwargs)
 
-    def match_url(self, request) -> bool:
+    def check(self, request, instance, **kwargs) -> bool:
+        """Checks if the menu item is visible based on the request.
+
+        Args:
+            request: The HTTP request object.
+            instance: The current object instance.
+
+        Returns:
+            bool: True if the menu item is visible, False otherwise.
+        """
+        if callable(self._check):
+            return self._check(request, instance, **kwargs)
+        return self._check
+
+    def match_url(self) -> bool:
         """Checks if the menu item's URL matches the request path.
 
         Args:
@@ -174,7 +190,7 @@ class BaseMenu(Node):
         Returns:
             bool: True if the URL matches the request path, False otherwise.
         """
-        self.selected = self.url == request.path
+        self.selected = self.url == self.request.path
         return self.selected
 
     def copy(self) -> "BaseMenu":
@@ -203,27 +219,27 @@ class MenuItem(BaseMenu):
 
         super().__init__(name, *args, **kwargs)
 
-    def process(self, request, **kwargs):
-        super().process(request, **kwargs)
+    def process(self, request, instance, **kwargs):
+        super().process(request, instance, **kwargs)
 
         if not self.visible:
             # didn't pass the check, no need to continue
             return
 
         # if the menu is visible, make sure the url is resolvable
-        self.url = self.resolve_url(request, **kwargs)
+        self.url = self.resolve_url(**kwargs)
         if self.url and self.visible:
-            self.match_url(request)
+            self.match_url()
         else:
             self.visible = False
 
-    def resolve_url(self, request, *args, **kwargs):
+    def resolve_url(self, *args, **kwargs):
         if self.view_name:
             with suppress(NoReverseMatch):
                 self.url = reverse(self.view_name, args=args, kwargs=kwargs)
 
         elif self.url and callable(self.url):
-            self.url = self.url(request, *args, **kwargs)
+            self.url = self.url(self.request, *args, **kwargs)
 
         if self.url and self.params:
             query_string = urlencode(self.params)
@@ -241,19 +257,20 @@ class Menu(BaseMenu):
             parent = root
         super().__init__(name, parent, children, **kwargs)
 
-    def process(self, request, **kwargs):
+    def process(self, request, instance, **kwargs):
         # first check whether the menu is visible
-        super().process(request, **kwargs)
+        super().process(request, instance, **kwargs)
         for child in self.children:
-            child.process(request, **kwargs)
+            child.process(request, instance, **kwargs)
 
-    def check(self, request, **kwargs):
-        # return True
-        self.visible = any([child.check(request) for child in self.children])
+    def check(self, request, instance, **kwargs):
+        self.visible = any(
+            [child.check(request, instance, **kwargs) for child in self.children]
+        )
         return self.visible
 
-    def match_url(self, request):
+    def match_url(self):
         """
         match url determines if this is selected
         """
-        return any([child.match_url(request) for child in self.children])
+        return any([child.match_url(self.request) for child in self.children])

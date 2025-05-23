@@ -10,13 +10,19 @@ register = template.Library()
 @register.simple_tag(takes_context=True)
 def process_menu(context, menu, **kwargs):
     request = context["request"]
+    instance = kwargs.pop("instance", None)
     if isinstance(menu, str):
         menu = root.get(menu)
-    menu.process(request, **kwargs)
+    menu.process(request, instance, **kwargs)
     return menu
 
 
 @register.simple_tag(takes_context=True)
 def render_menu(context, menu, template=None, **kwargs):
     menu = process_menu(context, menu, **kwargs)
-    return mark_safe(render_to_string(template or menu.root_template, {"menu": menu}))
+    return mark_safe(
+        render_to_string(
+            template or menu.root_template,
+            {"request": context["request"], "menu": menu},
+        )
+    )
