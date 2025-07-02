@@ -215,7 +215,8 @@ class MenuItem(BaseMenu):
             raise ValueError("Either a url or view_name must be provided")
         self.params = params or {}
         self.view_name = view_name
-        self.url = url
+        # self.url = None
+        self._url = url
 
         super().__init__(name, *args, **kwargs)
 
@@ -236,16 +237,14 @@ class MenuItem(BaseMenu):
     def resolve_url(self, *args, **kwargs):
         if self.view_name:
             with suppress(NoReverseMatch):
-                self.url = reverse(self.view_name, args=args, kwargs=kwargs)
+                return reverse(self.view_name, args=args, kwargs=kwargs)
 
-        elif self.url and callable(self.url):
-            self.url = self.url(self.request, *args, **kwargs)
+        elif self._url and callable(self._url):
+            return self._url(self.request, *args, **kwargs)
 
-        if self.url and self.params:
+        elif self._url and self.params:
             query_string = urlencode(self.params)
-            self.url = self.url + ("&" if "?" in self.url else "?") + query_string
-
-        return self.url
+            return self._url + ("&" if "?" in self.url else "?") + query_string
 
 
 class Menu(BaseMenu):
