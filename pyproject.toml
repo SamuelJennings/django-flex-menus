@@ -1,17 +1,98 @@
 [tool.poetry]
 name = "django-flex-menus"
-version = "0.1.0"
+version = "0.2.0"
 description = "Flexible site menus for Django"
-authors = ["Sam <samuel.scott.jennings@gmail.com>"]
+authors = ["Samuel Jennings <samuel.scott.jennings@gmail.com>"]
 license = "MIT"
 readme = "README.md"
-packages = [{include = "flex_menu" }]
+packages = [
+    {include = "flex_menu", from = "src"}
+    ]
+homepage = "https://github.com/SamuelJennings/django-flex-menus"
 
 [tool.poetry.dependencies]
-python = ">=3.1,<4.0"
-anytree = "^2.12.1"
+python = ">=3.10,<4.0"
+django = ">=4.2,<5.3"
+anytree = ">2"
 
+[tool.poetry.group.dev.dependencies]
+fairdm-dev-tools = {git = "https://github.com/FAIR-DM/dev-tools"}
+fairdm-docs = {git = "https://github.com/FAIR-DM/fairdm-docs", extras = ["sphinx_book_theme"]}
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+pythonpath = [".", "tests"]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py", "tests.py", "*_tests.py"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+    "--tb=short",
+    "--cov=flex_menu",
+    "--cov-report=html",
+    "-ra",
+]
+markers = [
+    "performance: marks tests as performance tests (deselect with '-m \"not performance\"')",
+    "integration: marks tests as integration tests",
+    "slow: marks tests as slow running (deselect with '-m \"not slow\"')",
+    "django_db: mark test to use django database"
+]
+filterwarnings = [
+    "ignore",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning"
+]
+
+[tool.coverage.report]
+skip_empty = true
+show_missing = true
+
+[tool.coverage.run]
+branch = true
+source = ["flex_menu"]
+
+[tool.djlint]
+profile = "django"
+indent = 2
+preserve_leading_space = true
+preserve_blank_lines = true
+format_attribute_template_tags = true
+format_css = true
+format_js = true
+max_line_length = 120
+max_attribute_length = 70
+include = "H006,H013,H020,H021,H023,H025,H030,H031"
+ignore = "H017"
+extension = "html"
+
+[tool.black]
+line-length = 120
+target-version = ['py38']
+preview = true
+
+[tool.isort]
+profile = "black"
+
+[tool.mypy]
+files = ["flex_menu"]
+disallow_untyped_defs = "False"
+disallow_any_unimported = "False"
+ignore_missing_imports = "True"
+no_implicit_optional = "True"
+check_untyped_defs = "False"
+warn_return_any = "True"
+warn_unused_ignores = "True"
+show_error_codes = "True"
+exclude = ["docs/","migrations/","tests/settings.py"]
+mypy_path = "flex_menu/"
+plugins = ["mypy_django_plugin.main"]
+
+[tool.django-stubs]
+django_settings_module = "tests.settings"
+ignore_missing_model_attributes = "True"
