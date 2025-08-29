@@ -1,0 +1,91 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    name: Test Python ${{ matrix.python-version }}, Django ${{ matrix.django-version }}
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+        django-version: ['3.2', '4.1', '4.2', '5.0']
+        exclude:
+          # Django 5.0 requires Python 3.10+
+          - python-version: '3.9'
+            django-version: '5.0'
+          # Django 4.2 LTS is recommended for Python 3.12
+          - python-version: '3.12'
+            django-version: '3.2'
+          - python-version: '3.12'
+            django-version: '4.1'
+      fail-fast: false
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libpq-dev
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+
+      - name: Install dependencies
+        run: |
+          poetry install
+          poetry add django==${{ matrix.django-version }}
+
+      - name: Run tests with SQLite
+        run: |
+          poetry run python manage.py test --verbosity=2
+        env:
+          DJANGO_SETTINGS_MODULE: tests.settings
+
+      - name: Run tests with PostgreSQL
+        run: |
+          poetry run python manage.py test --verbosity=2
+        env:
+          DJANGO_SETTINGS_MODULE: tests.settings
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_db
+
+      - name: Generate coverage report
+        if: matrix.python-version == '3.11' && matrix.django-version == '4.2'
+        run: |
+          poetry run coverage run --source=licensing manage.py test
+          poetry run coverage xml
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.11' && matrix.django-version == '4.2'
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella

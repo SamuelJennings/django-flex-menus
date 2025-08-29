@@ -1,0 +1,10 @@
+{% if menu.visible %}
+<a
+  href="{{ url }}"
+  class="list-group-item list-group-item-action ps-4{% if is_selected %} active{% endif %}"
+>
+  {% if icon %}
+  <i class="{{ icon }} me-2"></i>
+  {% endif %} {{ label|default:menu.name }}
+</a>
+{% endif %}

@@ -15,6 +15,7 @@
 .*.swp
 */.ipynb_checkpoints/*
 .DS_Store
+.vscode/
 
 # Unittest and coverage
 htmlcov
@@ -60,4 +61,3 @@ env.bak/
 venv.bak/
 
 dist
-

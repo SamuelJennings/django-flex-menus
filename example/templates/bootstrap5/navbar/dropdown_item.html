@@ -1,0 +1,15 @@
+{% comment %}
+Bootstrap 5 Navbar Dropdown Item Template
+Usage: Set as template for MenuLink class within dropdown menus
+{% endcomment %}
+
+{% if menu.visible %}
+<li>
+  <a class="dropdown-item{% if is_selected %} active{% endif %}" href="{{ url }}">
+    {% if icon %}
+    <i class="{{ icon }} me-2"></i>
+    {% endif %}
+    {{ label|default:menu.name }}
+  </a>
+</li>
+{% endif %}

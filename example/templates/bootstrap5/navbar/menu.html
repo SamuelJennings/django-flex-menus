@@ -1,0 +1,12 @@
+{% comment %}
+Bootstrap 5 Navbar Menu Template
+Usage: Set as template for Menu class for top-level navbar menus
+{% endcomment %}
+
+{% if menu.visible and has_visible_children %}
+  <ul class="navbar-nav">
+    {% for child in children %}
+  {{ child.render }}
+    {% endfor %}
+  </ul>
+{% endif %}

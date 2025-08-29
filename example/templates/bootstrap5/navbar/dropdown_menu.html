@@ -1,0 +1,24 @@
+{% comment %}
+Bootstrap 5 Navbar Dropdown Menu Template
+Usage: Set as template for Menu class that should render as dropdowns
+{% endcomment %}
+
+{% if menu.visible and has_visible_children %}
+  <li class="nav-item dropdown">
+    <a class="nav-link dropdown-toggle"
+       href="#"
+       role="button"
+       data-bs-toggle="dropdown"
+       aria-expanded="false">
+      {% if icon %}
+        <i class="{{ icon }} me-1"></i>
+      {% endif %}
+    {{ label|default:menu.name }}
+    </a>
+    <ul class="dropdown-menu">
+      {% for child in children %}
+    {{ child.render }}
+      {% endfor %}
+    </ul>
+  </li>
+{% endif %}

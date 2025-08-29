@@ -1,0 +1,15 @@
+{% comment %}
+Bootstrap 5 Navbar Item Template
+Usage: Set as template for MenuLink class for navbar links
+{% endcomment %}
+
+{% if menu.visible %}
+<li class="nav-item">
+  <a class="nav-link{% if is_selected %} active{% endif %}" href="{{ url }}" {% if is_selected %}aria-current="page" {% endif %}>
+    {% if icon %}
+    <i class="{{ icon }} me-1"></i>
+    {% endif %}
+    {{ label|default:menu.name }}
+  </a>
+</li>
+{% endif %}

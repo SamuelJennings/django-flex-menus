@@ -1,0 +1,59 @@
+{% if menu.visible and has_visible_children %}
+<!-- Submenu toggle button -->
+<button
+  class="list-group-item list-group-item-action d-flex justify-content-between align-items-center"
+  type="button"
+  data-bs-toggle="collapse"
+  data-bs-target="#submenu-{{ menu.name|slugify }}"
+  aria-expanded="false"
+  aria-controls="submenu-{{ menu.name|slugify }}"
+>
+  <span>
+    {% if icon %}
+    <i class="{{ icon }} me-2"></i>
+    {% endif %} {{ label|default:menu.name }}
+  </span>
+  <i class="fas fa-chevron-right submenu-toggle-icon"></i>
+</button>
+
+<!-- Collapsible submenu content -->
+<div class="collapse" id="submenu-{{ menu.name|slugify }}">
+  <div class="list-group list-group-flush">
+    {% for child in children %} {{ child.render }} {% endfor %}
+  </div>
+</div>
+
+<!-- CSS for the accordion toggle -->
+<style>
+  .submenu-toggle-icon {
+    transition: transform 0.2s ease;
+  }
+
+  .submenu-toggle-icon.rotated {
+    transform: rotate(90deg);
+  }
+</style>
+
+<!-- JavaScript to rotate the chevron -->
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const collapseElement = document.getElementById(
+      "submenu-{{ menu.name|slugify }}"
+    );
+    const toggleButton = document.querySelector(
+      '[data-bs-target="#submenu-{{ menu.name|slugify }}"]'
+    );
+    const chevron = toggleButton.querySelector(".submenu-toggle-icon");
+
+    collapseElement.addEventListener("show.bs.collapse", function () {
+      chevron.classList.add("rotated");
+      toggleButton.setAttribute("aria-expanded", "true");
+    });
+
+    collapseElement.addEventListener("hide.bs.collapse", function () {
+      chevron.classList.remove("rotated");
+      toggleButton.setAttribute("aria-expanded", "false");
+    });
+  });
+</script>
+{% endif %}

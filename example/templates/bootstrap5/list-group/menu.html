@@ -1,0 +1,9 @@
+{% comment %} Bootstrap 5 List Group Menu Template Usage: Set as template for
+Menu class for list-group container {% endcomment %}
+{% if menu.visible and has_visible_children %}
+  <div class="list-group">
+    {% for child in children %}
+{{ child.render }}
+    {% endfor %}
+  </div>
+{% endif %}
