@@ -79,7 +79,7 @@ jobs:
       - name: Generate coverage report
         if: matrix.python-version == '3.11' && matrix.django-version == '4.2'
         run: |
-          poetry run coverage run --source=licensing manage.py test
+          poetry run coverage run --source=flex_menu manage.py test
           poetry run coverage xml
 
       - name: Upload coverage to Codecov

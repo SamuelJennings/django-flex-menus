@@ -48,7 +48,7 @@ jobs:
           rm requirements-check.txt
 
       - name: Static type checking with mypy
-        run: poetry run mypy licensing/ || true  # Allow failure for now
+        run: poetry run mypy || true  # Allow failure for now
 
       - name: Check for obsolete dependencies
         run: poetry run deptry . || true  # Allow failure for now
@@ -66,7 +66,7 @@ jobs:
       - name: Run bandit security linter
         run: |
           poetry add --group dev bandit[toml]
-          poetry run bandit -r licensing/ -f json -o bandit-report.json || true
+          poetry run bandit -r flex_menu/ -f json -o bandit-report.json || true
 
       - name: Upload bandit report
         uses: actions/upload-artifact@v4
