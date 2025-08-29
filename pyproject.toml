@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "django-flex-menus"
-version = "0.3.1"
+version = "0.3.2"
 description = "Flexible site menus for Django"
 authors = ["Samuel Jennings <samuel.scott.jennings@gmail.com>"]
 license = "MIT"
