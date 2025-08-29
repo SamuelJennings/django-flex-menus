@@ -1,6 +1,7 @@
 import copy
 import logging
-from typing import Callable, List, Optional, Union
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Optional, Union
 from urllib.parse import urlencode
 
 from anytree import Node, RenderTree, search
@@ -10,6 +11,9 @@ from django.template.loader import render_to_string
 from django.urls import reverse
 from django.urls.exceptions import NoReverseMatch
 from django.utils.safestring import mark_safe
+
+if TYPE_CHECKING:
+    from typing import Type
 
 
 # Configuration for logging URL resolution failures
@@ -45,21 +49,19 @@ class BaseMenu(Node):
         extra_context (dict): Additional context data for template rendering.
     """
 
-    request: Optional[WSGIRequest]
+    request: WSGIRequest | None
     template_name = None  # Must be defined in subclasses
-    allowed_children: Optional[List[Union[type, str]]] = (
-        None  # None means allow any BaseMenu subclass
-    )
+    allowed_children: list[Union["Type[BaseMenu]", str]] | None = None  # None means allow any BaseMenu subclass
 
     def __init__(
         self,
         name: str,
         parent: Optional["BaseMenu"] = None,
-        children: Optional[List["BaseMenu"]] = None,
-        check: Union[Callable, bool] = True,
-        resolve_url: Optional[Callable] = None,
-        template_name: Optional[str] = None,
-        extra_context: Optional[dict] = None,
+        children: list["BaseMenu"] | None = None,
+        check: Callable | bool = True,
+        resolve_url: Callable | None = None,
+        template_name: str | None = None,
+        extra_context: dict | None = None,
         **kwargs,
     ):
         """
@@ -86,7 +88,7 @@ class BaseMenu(Node):
         # Initialize state attributes
         self.visible = False
         self.selected = False
-        self.request: Optional[WSGIRequest] = None
+        self.request: WSGIRequest | None = None
 
         if resolve_url is not None:
             self.resolve_url = resolve_url
@@ -117,10 +119,10 @@ class BaseMenu(Node):
 
         if self.allowed_children is not None:
             # Build list of actual allowed types, handling self-references
-            allowed_types = []
-            allowed_names = []
-            exact_class_matches = []  # Track which types require exact class matching
-            
+            allowed_types: list[type] = []
+            allowed_names: list[str] = []
+            exact_class_matches: list[bool] = []  # Track which types require exact class matching
+
             for allowed_type in self.allowed_children:
                 if allowed_type == "self":
                     # Allow instances of the same class as the parent (exact match only)
@@ -128,10 +130,15 @@ class BaseMenu(Node):
                     allowed_names.append(self.__class__.__name__)
                     exact_class_matches.append(True)
                 else:
+                    # allowed_type should be a class type here
+                    if isinstance(allowed_type, str):
+                        raise TypeError(
+                            f"Invalid allowed_children entry: {allowed_type}. Only 'self' string is allowed."
+                        )
                     allowed_types.append(allowed_type)
                     allowed_names.append(allowed_type.__name__)
                     exact_class_matches.append(False)
-            
+
             # Check if child matches any allowed type
             is_allowed = False
             for allowed_type, exact_match in zip(allowed_types, exact_class_matches):
@@ -145,7 +152,7 @@ class BaseMenu(Node):
                     if isinstance(child, allowed_type):
                         is_allowed = True
                         break
-            
+
             if not is_allowed:
                 raise TypeError(
                     f"{self.__class__.__name__} only allows children of types {allowed_names} "
@@ -162,9 +169,9 @@ class BaseMenu(Node):
             TypeError: If the child type is not allowed.
         """
         self._validate_child(child)
-        child.parent = self
+        child.parent = self  # type: ignore[has-type]
 
-    def extend(self, children: List["BaseMenu"]) -> None:
+    def extend(self, children: list["BaseMenu"]) -> None:
         """Appends multiple child nodes to the current menu.
 
         Args:
@@ -179,11 +186,11 @@ class BaseMenu(Node):
 
         # If validation passes, add all children
         for child in children:
-            child.parent = self
+            child.parent = self  # type: ignore[has-type]
 
     def insert(
         self,
-        children: Union["BaseMenu", List["BaseMenu"]],
+        children: Union["BaseMenu", list["BaseMenu"]],
         position: int,
     ) -> None:
         """Inserts child nodes at a specified position.
@@ -202,7 +209,7 @@ class BaseMenu(Node):
         for child in children:
             self._validate_child(child)
 
-        old = list(self.children)
+        old = list(self.children)  # type: ignore[has-type]
         new = old[:position] + children + old[position:]
         self.children = new
 
@@ -223,13 +230,11 @@ class BaseMenu(Node):
         if existing_child:
             children_list = list(self.children)
             insert_index = children_list.index(existing_child) + 1
-            self.children = (
-                children_list[:insert_index] + [child] + children_list[insert_index:]
-            )
+            self.children = children_list[:insert_index] + [child] + children_list[insert_index:]
         else:
             raise ValueError(f"No child with name '{named}' found.")
 
-    def pop(self, name: Optional[str] = None) -> "BaseMenu":
+    def pop(self, name: str | None = None) -> "BaseMenu":
         """Removes a child node or detaches the current node from its parent.
 
         Args:
@@ -244,14 +249,14 @@ class BaseMenu(Node):
         if name:
             node = self.get(name)
             if node:
-                node.parent = None
+                node.parent = None  # type: ignore[has-type]
                 return node
             else:
                 raise ValueError(f"No child with name {name} found.")
         self.parent = None
         return self
 
-    def get(self, name: str, maxlevel: Optional[int] = None) -> Optional["BaseMenu"]:
+    def get(self, name: str, maxlevel: int | None = None) -> Optional["BaseMenu"]:
         """Finds a child node by name.
 
         Args:
@@ -269,9 +274,8 @@ class BaseMenu(Node):
         # maxlevel=1 should search direct children, so we need anytree maxlevel=2
         anytree_maxlevel = maxlevel + 1 if maxlevel is not None else None
 
-        return search.find_by_attr(
-            self, value=name, name="name", maxlevel=anytree_maxlevel
-        )
+        result = search.find_by_attr(self, value=name, name="name", maxlevel=anytree_maxlevel)
+        return result  # type: ignore[no-any-return]
 
     def print_tree(self) -> str:
         """Prints the menu tree structure.
@@ -279,7 +283,8 @@ class BaseMenu(Node):
         Returns:
             str: A string representation of the tree.
         """
-        return RenderTree(self).by_attr("name")
+        result = RenderTree(self).by_attr("name")
+        return str(result)
 
     def process(self, request, **kwargs) -> "BaseMenu":
         """Processes the visibility of the menu based on a request.
@@ -324,8 +329,9 @@ class BaseMenu(Node):
             bool: True if the menu item is visible, False otherwise.
         """
         if callable(self._check):
-            return self._check(request, **kwargs)
-        return self._check
+            result = self._check(request, **kwargs)
+            return bool(result)
+        return bool(self._check)
 
     def get_context_data(self, **kwargs) -> dict:
         """
@@ -348,7 +354,7 @@ class BaseMenu(Node):
         }
         return context
 
-    def get_template_names(self) -> List[str]:
+    def get_template_names(self) -> list[str]:
         """
         Get the template names for rendering this menu.
 
@@ -396,11 +402,12 @@ class BaseMenu(Node):
         Returns:
             bool: True if the URL matches the request path, False otherwise.
         """
-        if not hasattr(self, "url") or not self.url or not self.request:
+        url = getattr(self, "url", None)
+        if not url or not self.request:
             self.selected = False
             return False
 
-        self.selected = self.url == self.request.path
+        self.selected = url == self.request.path
         return self.selected
 
     def copy(self) -> "BaseMenu":
@@ -422,17 +429,16 @@ _NO_PARENT = object()
 
 
 class MenuLink(BaseMenu):
-    template_name = None
+    template_name = "menu/item.html"
 
     def __init__(
         self,
         name: str,
         view_name: str = "",
         url: str = "",
-        params: Optional[dict] = None,
-        template_name: Optional[str] = None,
-        extra_context: Optional[dict] = None,
-        *args,
+        params: dict | None = None,
+        template_name: str | None = None,
+        extra_context: dict | None = None,
         **kwargs,
     ):
         if not url and not view_name:
@@ -446,7 +452,6 @@ class MenuLink(BaseMenu):
             name,
             template_name=template_name,
             extra_context=extra_context,
-            *args,
             **kwargs,
         )
 
@@ -486,9 +491,7 @@ class MenuLink(BaseMenu):
                 # Only log if explicitly configured to do so
                 if _should_log_url_failures():
                     logger = logging.getLogger(__name__)
-                    logger.warning(
-                        f"Could not reverse URL for view '{self.view_name}' in menu item '{self.name}'"
-                    )
+                    logger.warning(f"Could not reverse URL for view '{self.view_name}' in menu item '{self.name}'")
                 # Cache failure for static URLs
                 if not args and not kwargs:
                     self._cached_url = None
@@ -501,9 +504,7 @@ class MenuLink(BaseMenu):
                 # Only log if explicitly configured to do so
                 if _should_log_url_failures():
                     logger = logging.getLogger(__name__)
-                    logger.warning(
-                        f"Error calling URL function for menu item '{self.name}': {e}"
-                    )
+                    logger.warning(f"Error calling URL function for menu item '{self.name}': {e}")
                 return None
 
         elif self._url:
@@ -564,21 +565,20 @@ class MenuLink(BaseMenu):
 
 class MenuItem(BaseMenu):
     """A menu item that doesn't provide a link - used for non-clickable menu items like headers or separators."""
+
     template_name = None
 
     def __init__(
         self,
         name: str,
-        template_name: Optional[str] = None,
-        extra_context: Optional[dict] = None,
-        *args,
+        template_name: str | None = None,
+        extra_context: dict | None = None,
         **kwargs,
     ):
         super().__init__(
             name,
             template_name=template_name,
             extra_context=extra_context,
-            *args,
             **kwargs,
         )
 
@@ -595,7 +595,7 @@ class MenuItem(BaseMenu):
 
 
 class MenuGroup(BaseMenu):
-    template_name = None
+    template_name = "menu/menu.html"
 
     def __init__(
         self,
@@ -629,9 +629,7 @@ class MenuGroup(BaseMenu):
         processed_children = []
         for child in self.children:
             processed_child = child.process(request, **kwargs)
-            if (
-                processed_child and processed_child.visible
-            ):  # Only include visible children
+            if processed_child and processed_child.visible:  # Only include visible children
                 processed_children.append(processed_child)
 
         # Set children on processed copy (avoiding anytree parent/child mutation)

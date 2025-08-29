@@ -121,9 +121,7 @@ class BS5ListGroupMenu(MenuGroup):
 site_nav = BS5NavbarMenu(
     "site_nav",
     children=[
-        BS5NavbarItem(
-            "Home", view_name="home", extra_context={"label": "Home"}
-        ),
+        BS5NavbarItem("Home", view_name="home", extra_context={"label": "Home"}),
         BS5NavbarItem(
             "About",
             view_name="about",
@@ -170,9 +168,7 @@ site_nav = BS5NavbarMenu(
 sidebar_nav = BS5ListGroupMenu(
     "sidebar_nav",
     children=[
-        BS5ListGroupItem(
-            "Home", view_name="home", extra_context={"label": "Home", "icon": "fas fa-home"}
-        ),
+        BS5ListGroupItem("Home", view_name="home", extra_context={"label": "Home", "icon": "fas fa-home"}),
         BS5ListGroupItem(
             "About",
             view_name="about",
@@ -212,5 +208,3 @@ sidebar_nav = BS5ListGroupMenu(
         ),
     ],
 )
-
-

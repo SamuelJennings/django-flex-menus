@@ -1,11 +1,12 @@
 import pytest
 
 
-def test_menu_link_requires_template_name():
+def test_menu_link_has_default_template_name():
     from flex_menu.menu import MenuLink
     link = MenuLink("test", url="/test/")
-    with pytest.raises(NotImplementedError):
-        link.get_template_names()
+    assert link.template_name == "menu/item.html"
+    template_names = link.get_template_names()
+    assert template_names == ["menu/item.html"]
 
 def test_menu_item_requires_template_name():
     from flex_menu.menu import MenuItem
@@ -13,11 +14,12 @@ def test_menu_item_requires_template_name():
     with pytest.raises(NotImplementedError):
         item.get_template_names()
 
-def test_menu_group_requires_template_name():
+def test_menu_group_has_default_template_name():
     from flex_menu.menu import MenuGroup
     group = MenuGroup("test")
-    with pytest.raises(NotImplementedError):
-        group.get_template_names()
+    assert group.template_name == "menu/menu.html"
+    template_names = group.get_template_names()
+    assert template_names == ["menu/menu.html"]
 """
 Improved tests for the basic menu functionality in django-flex-menus.
 This replaces the original test_menu.py with better structured tests.

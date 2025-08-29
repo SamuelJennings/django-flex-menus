@@ -7,6 +7,8 @@ to control their visibility based on various conditions.
 All check functions receive a Django request object and optional keyword arguments.
 They should return a boolean value indicating whether the menu item should be visible.
 """
+
+
 def user_is_staff(request, **kwargs):
     """
     Check if the user associated with the given request is a staff member.
@@ -18,7 +20,7 @@ def user_is_staff(request, **kwargs):
     Returns:
         bool: True if the user is a staff member, False otherwise.
     """
-    return hasattr(request, 'user') and request.user and request.user.is_staff
+    return hasattr(request, "user") and request.user and request.user.is_staff
 
 
 def user_is_authenticated(request, **kwargs):
@@ -32,7 +34,7 @@ def user_is_authenticated(request, **kwargs):
     Returns:
         bool: True if the user is authenticated, False otherwise.
     """
-    return hasattr(request, 'user') and request.user and request.user.is_authenticated
+    return hasattr(request, "user") and request.user and request.user.is_authenticated
 
 
 def user_is_anonymous(request, **kwargs):
@@ -46,7 +48,7 @@ def user_is_anonymous(request, **kwargs):
     Returns:
         bool: True if the user is anonymous, False otherwise.
     """
-    return not hasattr(request, 'user') or not request.user or request.user.is_anonymous
+    return not hasattr(request, "user") or not request.user or request.user.is_anonymous
 
 
 def user_is_superuser(request, **kwargs):
@@ -60,7 +62,7 @@ def user_is_superuser(request, **kwargs):
     Returns:
         bool: True if the user is a superuser, False otherwise.
     """
-    return hasattr(request, 'user') and request.user and request.user.is_superuser
+    return hasattr(request, "user") and request.user and request.user.is_superuser
 
 
 def user_in_any_group(*groups):
@@ -83,9 +85,9 @@ def user_in_any_group(*groups):
 
     def _function(request, **kwargs):
         return (
-            hasattr(request, 'user') and 
-            request.user and
-            request.user.is_authenticated
+            hasattr(request, "user")
+            and request.user
+            and request.user.is_authenticated
             and request.user.groups.filter(name__in=groups).exists()
         )
 
@@ -110,11 +112,10 @@ def user_has_any_permission(*perms: str):
 
     def _check(request, **kwargs):
         return (
-            hasattr(request, 'user') and 
-            request.user and
-            request.user.is_authenticated and any(
-                request.user.has_perm(perm) for perm in perms
-            )
+            hasattr(request, "user")
+            and request.user
+            and request.user.is_authenticated
+            and any(request.user.has_perm(perm) for perm in perms)
         )
 
     return _check
@@ -167,10 +168,10 @@ def user_in_all_groups(*groups):
     """
 
     def _function(request, **kwargs):
-        if not (hasattr(request, 'user') and request.user and request.user.is_authenticated):
+        if not (hasattr(request, "user") and request.user and request.user.is_authenticated):
             return False
-        
-        user_groups = request.user.groups.values_list('name', flat=True)
+
+        user_groups = request.user.groups.values_list("name", flat=True)
         return all(group in user_groups for group in groups)
 
     return _function
@@ -193,9 +194,9 @@ def user_has_all_permissions(*perms: str):
     """
 
     def _check(request, **kwargs):
-        if not (hasattr(request, 'user') and request.user and request.user.is_authenticated):
+        if not (hasattr(request, "user") and request.user and request.user.is_authenticated):
             return False
-        
+
         return all(request.user.has_perm(perm) for perm in perms)
 
     return _check
@@ -212,9 +213,9 @@ def user_is_active(request, **kwargs):
     Returns:
         bool: True if the user is active, False otherwise.
     """
-    if not (hasattr(request, 'user') and request.user):
+    if not (hasattr(request, "user") and request.user):
         return False
-    return bool(getattr(request.user, 'is_active', False))
+    return bool(getattr(request.user, "is_active", False))
 
 
 def user_email_verified(request, **kwargs):
@@ -228,13 +229,13 @@ def user_email_verified(request, **kwargs):
     Returns:
         bool: True if the user's email is verified, False otherwise.
     """
-    if not (hasattr(request, 'user') and request.user and request.user.is_authenticated):
+    if not (hasattr(request, "user") and request.user and request.user.is_authenticated):
         return False
-    
+
     # Check if the user model has email_verified field
-    if hasattr(request.user, 'email_verified'):
+    if hasattr(request.user, "email_verified"):
         return request.user.email_verified
-    
+
     # If no email_verified field, assume verified for authenticated users
     return True
 
@@ -250,12 +251,12 @@ def user_has_profile(request, **kwargs):
     Returns:
         bool: True if the user has a profile, False otherwise.
     """
-    if not (hasattr(request, 'user') and request.user and request.user.is_authenticated):
+    if not (hasattr(request, "user") and request.user and request.user.is_authenticated):
         return False
-    
+
     # Check common profile relationship names
-    profile_attrs = ['profile', 'userprofile', 'user_profile']
-    
+    profile_attrs = ["profile", "userprofile", "user_profile"]
+
     for attr in profile_attrs:
         if hasattr(request.user, attr):
             try:
@@ -263,7 +264,7 @@ def user_has_profile(request, **kwargs):
                 return profile is not None
             except AttributeError:
                 continue
-    
+
     return True  # Assume profile exists if no profile model detected
 
 
@@ -278,7 +279,7 @@ def request_is_ajax(request, **kwargs):
     Returns:
         bool: True if the request is AJAX, False otherwise.
     """
-    return request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
 
 def request_is_secure(request, **kwargs):
@@ -336,12 +337,12 @@ def user_attribute_equals(attribute_name: str, expected_value):
     """
 
     def _check(request, **kwargs):
-        if not (hasattr(request, 'user') and request.user and request.user.is_authenticated):
+        if not (hasattr(request, "user") and request.user and request.user.is_authenticated):
             return False
-        
+
         if hasattr(request.user, attribute_name):
             return getattr(request.user, attribute_name) == expected_value
-        
+
         return False
 
     return _check
@@ -365,12 +366,12 @@ def user_in_group_with_permission(group_name: str, permission: str):
     """
 
     def _check(request, **kwargs):
-        if not (hasattr(request, 'user') and request.user and request.user.is_authenticated):
+        if not (hasattr(request, "user") and request.user and request.user.is_authenticated):
             return False
-        
+
         has_group = request.user.groups.filter(name=group_name).exists()
         has_permission = request.user.has_perm(permission)
-        
+
         return has_group and has_permission
 
     return _check
@@ -388,10 +389,11 @@ def debug_mode_only(request, **kwargs):
         bool: True if DEBUG=True, False otherwise.
     """
     from django.conf import settings
+
     return settings.DEBUG
 
 
-def combine_checks(*check_functions, operator='and'):
+def combine_checks(*check_functions, operator="and"):
     """
     Combine multiple check functions with AND or OR logic.
 
@@ -409,7 +411,7 @@ def combine_checks(*check_functions, operator='and'):
     """
 
     def _check(request, **kwargs):
-        if operator.lower() == 'or':
+        if operator.lower() == "or":
             return any(check_func(request, **kwargs) for check_func in check_functions)
         else:  # default to 'and'
             return all(check_func(request, **kwargs) for check_func in check_functions)
