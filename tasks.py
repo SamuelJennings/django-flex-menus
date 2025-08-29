@@ -19,7 +19,7 @@ def docs(c):
     """
     Build the documentation and open it in the browser
     """
-    c.run("sphinx-apidoc -M -T -o docs/ licensing **/migrations/* -e --force -d 2")
+    c.run("sphinx-apidoc -M -T -o docs/ flex_menu **/migrations/* -e --force -d 2")
     c.run("sphinx-build -E -b html docs docs/_build")
 
 
@@ -110,14 +110,18 @@ def release(c, rule="", commit_staged=False):
         staged_result = c.run("git diff --cached --name-only", hide=True, warn=True)
         if staged_result.stdout.strip():
             print(f"🚀 Committing staged changes and version bump for v{version_short}")
-            c.run(f'git commit -m "Release v{version_short}"')
-
-    c.run(f'git commit pyproject.toml -m "Release v{version_short}"')
+            c.run(f'git add pyproject.toml && git commit -m "Release v{version_short}"')
+        else:
+            print(f"🚀 No staged changes found, committing only version bump for v{version_short}")
+            c.run(f'git commit pyproject.toml -m "Release v{version_short}"')
+    else:
+        c.run(f'git commit pyproject.toml -m "Release v{version_short}"')
 
     # 3. create a tag and push it to the remote repository
     c.run(f'git tag -a v{version_short} -m "{version}"')
     c.run("git push --tags")
     c.run("git push origin main")
+
 
 @task
 def live_docs(c):

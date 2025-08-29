@@ -1,5 +1,11 @@
 # Django Flex Menu
 
+[![Github Build](https://github.com/SamuelJennings/django-flex-menus/actions/workflows/build.yml/badge.svg)](https://github.com/SamuelJennings/django-flex-menus/actions/workflows/build.yml)
+[![Github Tests](https://github.com/SamuelJennings/django-flex-menus/actions/workflows/tests.yml/badge.svg)](https://github.com/SamuelJennings/django-flex-menus/actions/workflows/tests.yml)
+[![codecov](https://codecov.io/gh/SamuelJennings/django-flex-menus/branch/main/graph/badge.svg)](https://codecov.io/gh/SamuelJennings/django-flex-menus)
+![GitHub](https://img.shields.io/github/license/SamuelJennings/django-flex-menus)
+![GitHub last commit](https://img.shields.io/github/last-commit/SamuelJennings/django-flex-menus)
+
 A flexible menu management system for Django built around [anytree](https://github.com/c0fec0de/anytree).
 
 
