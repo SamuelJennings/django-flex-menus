@@ -74,12 +74,16 @@ def prerelease(c):
 
 
 @task
-def release(c, rule=""):
+def release(c, rule="", commit_staged=False):
     """
     Create a new git tag and push it to the remote repository.
 
     .. note::
         This will create a new tag and push it to the remote repository, which will trigger a new build and deployment of the package to PyPI.
+
+    Args:
+        rule: Version bump rule (major, minor, patch, etc.)
+        commit_staged: If True, commit all staged changes along with the version bump
 
     RULE	    BEFORE	AFTER
     major	    1.3.0	2.0.0
@@ -100,14 +104,20 @@ def release(c, rule=""):
     version_short = c.run("poetry version -s", hide=True).stdout.strip()
     version = c.run("poetry version", hide=True).stdout.strip()
 
-    # 2. commit the changes to pyproject.toml
+    # 2. commit the changes to pyproject.toml (and optionally staged changes)
+    if commit_staged:
+        # Check if there are any staged changes
+        staged_result = c.run("git diff --cached --name-only", hide=True, warn=True)
+        if staged_result.stdout.strip():
+            print(f"🚀 Committing staged changes and version bump for v{version_short}")
+            c.run(f'git commit -m "Release v{version_short}"')
+
     c.run(f'git commit pyproject.toml -m "Release v{version_short}"')
 
     # 3. create a tag and push it to the remote repository
     c.run(f'git tag -a v{version_short} -m "{version}"')
     c.run("git push --tags")
     c.run("git push origin main")
-
 
 @task
 def live_docs(c):
