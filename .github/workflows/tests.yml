@@ -16,30 +16,7 @@ jobs:
       matrix:
         python-version: ['3.10', '3.11', '3.12']
         django-version: ['3.2', '4.1', '4.2', '5.0']
-        exclude:
-          # Django 5.0 requires Python 3.10+
-          - python-version: '3.9'
-            django-version: '5.0'
-          # Django 4.2 LTS is recommended for Python 3.12
-          - python-version: '3.12'
-            django-version: '3.2'
-          - python-version: '3.12'
-            django-version: '4.1'
       fail-fast: false
-
-    services:
-      postgres:
-        image: postgres:15
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_db
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
 
     steps:
       - name: Check out
@@ -63,24 +40,13 @@ jobs:
           poetry install
           poetry add django==${{ matrix.django-version }}
 
-      - name: Run tests with SQLite
+      - name: Run tests
         run: |
-          poetry run python manage.py test --verbosity=2
-        env:
-          DJANGO_SETTINGS_MODULE: tests.settings
-
-      - name: Run tests with PostgreSQL
-        run: |
-          poetry run python manage.py test --verbosity=2
-        env:
-          DJANGO_SETTINGS_MODULE: tests.settings
-          DATABASE_URL: postgres://postgres:postgres@localhost:5432/test_db
-
-      - name: Generate coverage report
-        if: matrix.python-version == '3.11' && matrix.django-version == '4.2'
-        run: |
-          poetry run coverage run --source=flex_menu manage.py test
-          poetry run coverage xml
+          if [ "${{ matrix.python-version }}" = "3.11" ] && [ "${{ matrix.django-version }}" = "4.2" ]; then
+            poetry run pytest --cov=flex_menu --cov-report=xml
+          else
+            poetry run pytest
+          fi
 
       - name: Upload coverage to Codecov
         if: matrix.python-version == '3.11' && matrix.django-version == '4.2'

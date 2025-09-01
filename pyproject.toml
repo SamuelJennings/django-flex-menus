@@ -33,8 +33,6 @@ addopts = [
     "--strict-config",
     "--verbose",
     "--tb=short",
-    "--cov=flex_menu",
-    "--cov-report=html",
     "-ra",
 ]
 markers = [

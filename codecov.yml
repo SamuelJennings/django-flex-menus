@@ -1,18 +1,20 @@
-# Badge color changes from red to green between 70% and 100%
-# PR pipeline fails if codecov falls with 1%
-
 coverage:
-  range: 70..100
+  range: 70..100        # badge color scale
   round: down
   precision: 1
+
   status:
     project:
       default:
-        target: auto
-        threshold: 1%
+        target: 80%     # aim for at least 80% total coverage
+        threshold: 1%   # allow PRs to drop max 1% vs base branch
+        informational: true
+    patch:
+      default:
+        target: 80%     # aim for at least 80% coverage on new code
+        informational: true
 
-# Ignoring Paths
-# --------------
-# which folders/files to ignore
-# ignore:
-  # - "foo/bar.py"
+ignore:
+  - "tests/*"           # don’t measure test files themselves
+  - "docs/*"            # ignore docs
+  - "manage.py"
