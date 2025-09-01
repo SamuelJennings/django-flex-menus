@@ -41,6 +41,7 @@ context-aware-example
 dynamic-url-resolution
 checks
 configuration
+api/index
 ```
 
 ## License

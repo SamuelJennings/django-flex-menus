@@ -19,7 +19,7 @@ def docs(c):
     """
     Build the documentation and open it in the browser
     """
-    c.run("sphinx-apidoc -M -T -o docs/ flex_menu **/migrations/* -e --force -d 2")
+    # c.run("sphinx-apidoc -M -T -o docs/ src/flex_menu **/migrations/* -e --force -d 2")
     c.run("sphinx-build -E -b html docs docs/_build")
 
 
