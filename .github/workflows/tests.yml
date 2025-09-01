@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         python-version: ['3.10', '3.11', '3.12']
-        django-version: ['3.2', '4.1', '4.2', '5.0']
+        django-version: ['4.1', '4.2', '5.0', '5.1', '5.2']
       fail-fast: false
 
     steps:
@@ -42,14 +42,14 @@ jobs:
 
       - name: Run tests
         run: |
-          if [ "${{ matrix.python-version }}" = "3.11" ] && [ "${{ matrix.django-version }}" = "4.2" ]; then
+          if [ "${{ matrix.python-version }}" = "3.12" ] && [ "${{ matrix.django-version }}" = "5.2" ]; then
             poetry run pytest --cov=flex_menu --cov-report=xml
           else
             poetry run pytest
           fi
 
       - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.11' && matrix.django-version == '4.2'
+        if: matrix.python-version == '3.12' && matrix.django-version == '5.2'
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.xml

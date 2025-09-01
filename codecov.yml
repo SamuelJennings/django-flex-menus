@@ -18,3 +18,8 @@ ignore:
   - "tests/*"           # don’t measure test files themselves
   - "docs/*"            # ignore docs
   - "manage.py"
+
+comment:
+  layout: "diff, files, tree"   # what shows up in PR comments
+  behavior: default             # update comment instead of posting new one each push
+  require_changes: false        # always post comment, even if no coverage change
