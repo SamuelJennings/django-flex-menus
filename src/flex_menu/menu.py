@@ -1,19 +1,25 @@
-import copy
+"""
+Unified MenuItem class for django-flex-menus.
+
+This module provides a single, flexible MenuItem class that can represent:
+- Clickable links (has url/view_name)
+- Containers/parents (has children)
+- Non-clickable items (headers, dividers)
+
+Note: Menu items cannot have both a URL and children - they must be either
+a link OR a container, not both.
+"""
+
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Optional, Union
+from typing import Optional
 from urllib.parse import urlencode
 
 from anytree import Node, RenderTree, search
 from django.conf import settings
 from django.core.handlers.wsgi import WSGIRequest
-from django.template.loader import render_to_string
-from django.urls import reverse
+from django.urls import get_resolver, reverse
 from django.urls.exceptions import NoReverseMatch
-from django.utils.safestring import mark_safe
-
-if TYPE_CHECKING:
-    from typing import Type
 
 
 # Configuration for logging URL resolution failures
@@ -25,206 +31,277 @@ def _should_log_url_failures():
     URL resolution is often expected behavior (e.g., menu items that should
     be hidden when users lack permissions or when optional views aren't available).
 
-    Can be overridden with the FLEX_MENU_LOG_URL_FAILURES setting.
+    Can be overridden with the FLEX_MENUS['log_url_failures'] setting.
 
     Returns:
         bool: True if URL failures should be logged, False otherwise.
     """
-    return getattr(settings, "FLEX_MENU_LOG_URL_FAILURES", settings.DEBUG)
+    return getattr(settings, "FLEX_MENUS", {}).get("log_url_failures", settings.DEBUG)
 
 
-class BaseMenu(Node):
-    """Represents a base menu structure with hierarchical nodes.
+def get_required_url_params(view_name):
+    """
+    Given a Django view_name (as used in reverse()), return the names of the
+    required URL parameters (e.g. ['pk'] or ['slug']).
+    """
+    resolver = get_resolver()
+    patterns = resolver.reverse_dict.getlist(view_name)
+    if not patterns:
+        raise NoReverseMatch(f"No URL pattern found for view name '{view_name}'.")
 
-    Inherits from `anytree.Node` and provides additional functionality
-    for dynamic menu construction, URL resolution, and visibility checking.
+    # reverse_dict.getlist(view_name) returns tuples like:
+    # [(possibilities, pattern_list, defaults, converters), ...]
+
+    params = set()
+    for possibilities, pattern_list, defaults, converters in patterns:
+        # The converters dict contains parameter names as keys
+        if converters:
+            params.update(converters.keys())
+
+    return sorted(params)
+
+
+# Sentinel value to distinguish between "no parent specified" and "explicitly no parent"
+class _NoParentType:
+    pass
+
+
+_NO_PARENT = _NoParentType()
+
+
+class MenuItem(Node):
+    """
+    Unified menu item that can be:
+    - A clickable link (has url/view_name)
+    - A container/parent (has children)
+    - A non-clickable item (neither url nor children)
+
+    Note: A MenuItem cannot have both a URL and children - it must be either
+    a link OR a container, not both.
 
     Attributes:
-        visible (bool): Whether the menu is visible, determined during processing.
-        selected (bool): Whether the menu item matches the current request path.
-        template (str): The template used for rendering this menu.
-        allowed_children (List[type]): List of allowed child classes. None means any BaseMenu subclass is allowed.
-                                      Use the string "self" to allow instances of the exact same class as the parent
-                                      (inheritance is not considered for "self" references).
-        extra_context (dict): Additional context data for template rendering.
+        name (str): The unique name/identifier for this menu item.
+        view_name (str): Django URL name for reverse resolution.
+        url (str | Callable): Static URL or callable that returns URL.
+        params (dict): Query parameters to append to the URL.
+        parent (MenuItem): Parent menu item in the hierarchy.
+        children (list[MenuItem]): Child menu items.
+        check (Callable | bool): Function to determine visibility or boolean.
+        extra_context (dict): Additional context data for templates.
+
+    State attributes (set during processing):
+        visible (bool): Whether this item passed visibility checks.
+        selected (bool): Whether this item's URL matches the current request path.
+        url (str): Resolved URL (after processing).
+        request (WSGIRequest): The current request object.
     """
 
     request: WSGIRequest | None
-    template_name = None  # Must be defined in subclasses
-    allowed_children: list[Union["Type[BaseMenu]", str]] | None = None  # None means allow any BaseMenu subclass
+    _processed_children: list["MenuItem"]
+    _original_children: tuple["MenuItem", ...]
+    _cached_url: str | None
 
     def __init__(
         self,
         name: str,
-        parent: Optional["BaseMenu"] = None,
-        children: list["BaseMenu"] | None = None,
+        view_name: str = "",
+        url: str | Callable = "",
+        params: dict | None = None,
+        parent: Optional["MenuItem"] | _NoParentType = None,
+        children: list["MenuItem"] | None = None,
         check: Callable | bool = True,
-        resolve_url: Callable | None = None,
-        template_name: str | None = None,
         extra_context: dict | None = None,
         **kwargs,
     ):
         """
-        Initializes a new menu node.
+        Initialize a menu item.
 
         Args:
-            name (str): The unique name of the menu item.
-            parent (Optional[BaseMenu]): The parent menu item.
-            children (Optional[List[BaseMenu]]): List of child menu items.
-            check (Optional[Callable]): A callable that determines if the menu is visible.
-            resolve_url (Optional[Callable]): A callable to resolve the menu item's URL.
-            template_name (Optional[str]): Custom template for this menu item.
-            extra_context (Optional[dict]): Additional context data for template rendering.
+            name: Unique identifier for this menu item.
+            view_name: Django URL name for reverse resolution.
+            url: Static URL string or callable returning URL.
+            params: Query parameters dict to append to URL.
+            parent: Parent menu item (or None for root-level items).
+            children: List of child menu items.
+            check: Callable(request, **kwargs) -> bool or boolean value.
+            extra_context: Additional context for template rendering.
             **kwargs: Additional attributes for the node.
+
+        Raises:
+            ValueError: If both URL/view_name and children are provided.
         """
+        # Validate: cannot have both URL and children
+        if (view_name or url) and children:
+            raise ValueError(
+                f"MenuItem '{name}' cannot have both a URL/view_name and children. "
+                f"Menu items must be EITHER a link OR a container, not both. "
+                f"If you need a clickable item in a dropdown, add it as the first child."
+            )
+
+        # Handle parent=None -> attach to root by default
+        if parent is None:
+            parent = root
+        elif parent is _NO_PARENT:
+            parent = None
+
         super().__init__(name, parent=parent, children=children, **kwargs)
+
+        # URL-related attributes
+        self.view_name = view_name
+        self._url = url
+        self.params = params or {}
+
+        # Visibility and context
         self._check = check
         self.extra_context = extra_context or {}
 
-        # Set template (use provided template or keep class default)
-        if template_name is not None:
-            self.template_name = template_name
-
-        # Initialize state attributes
+        # State (set during processing)
         self.visible = False
         self.selected = False
+        self.url: str | None = None  # Resolved URL
         self.request: WSGIRequest | None = None
-
-        if resolve_url is not None:
-            self.resolve_url = resolve_url
+        self._processed_children: list["MenuItem"] = []
 
     def __str__(self) -> str:
-        return f"{self.__class__.__name__}(name={self.name})"
+        return f"MenuItem(name={self.name})"
 
-    def __getitem__(self, name: str) -> "BaseMenu":
+    def __getitem__(self, name: str) -> "MenuItem":
+        """Get child by name using bracket notation."""
         node = self.get(name)
         if node is None:
             raise KeyError(f"No child with name {name} found.")
         return node
 
     def __iter__(self):
+        """Iterate over children."""
         yield from self.children
 
-    def _validate_child(self, child: "BaseMenu") -> None:
-        """Validate that a child is of an allowed type or subclass.
+    # ========== Properties ==========
+
+    @property
+    def has_url(self) -> bool:
+        """True if this menu item has a URL (view_name or url)."""
+        return bool(self.view_name or self._url)
+
+    @property
+    def has_children(self) -> bool:
+        """True if this menu has child items."""
+        return len(self.children) > 0  # type: ignore[has-type]
+
+    @property
+    def visible_children(self) -> list["MenuItem"]:
+        """Return processed, visible children (after processing)."""
+        return self._processed_children
+
+    @property
+    def has_visible_children(self) -> bool:
+        """True if this menu has visible children after processing."""
+        return len(self._processed_children) > 0
+
+    @property
+    def is_parent(self) -> bool:
+        """Alias for has_children."""
+        return self.has_children
+
+    @property
+    def is_leaf(self) -> bool:
+        """True if this is a leaf node (no children)."""
+        return not self.has_children
+
+    @property
+    def is_clickable(self) -> bool:
+        """True if this item can be clicked (has URL)."""
+        return self.has_url
+
+    @property
+    def depth(self) -> int:
+        """
+        Depth in the tree.
+        0 = root, 1 = top-level items, 2 = nested items, etc.
+        """
+        return len(self.path) - 1
+
+    # ========== Menu Manipulation Methods ==========
+
+    def append(self, child: "MenuItem") -> None:
+        """
+        Append a child menu item.
 
         Args:
-            child: The child menu to validate
+            child: The child menu item to append.
 
         Raises:
-            TypeError: If child is not of an allowed type or subclass thereof
+            ValueError: If this item has a URL (cannot have both URL and children).
         """
-        if not isinstance(child, BaseMenu):
-            raise TypeError(f"Child must be a BaseMenu instance, got {type(child)}")
-
-        if self.allowed_children is not None:
-            # Build list of actual allowed types, handling self-references
-            allowed_types: list[type] = []
-            allowed_names: list[str] = []
-            exact_class_matches: list[bool] = []  # Track which types require exact class matching
-
-            for allowed_type in self.allowed_children:
-                if allowed_type == "self":
-                    # Allow instances of the same class as the parent (exact match only)
-                    allowed_types.append(self.__class__)
-                    allowed_names.append(self.__class__.__name__)
-                    exact_class_matches.append(True)
-                else:
-                    # allowed_type should be a class type here
-                    if isinstance(allowed_type, str):
-                        raise TypeError(
-                            f"Invalid allowed_children entry: {allowed_type}. Only 'self' string is allowed."
-                        )
-                    allowed_types.append(allowed_type)
-                    allowed_names.append(allowed_type.__name__)
-                    exact_class_matches.append(False)
-
-            # Check if child matches any allowed type
-            is_allowed = False
-            for allowed_type, exact_match in zip(allowed_types, exact_class_matches):
-                if exact_match:
-                    # For "self" references, require exact class match
-                    if type(child) is allowed_type:
-                        is_allowed = True
-                        break
-                else:
-                    # For regular types, allow inheritance
-                    if isinstance(child, allowed_type):
-                        is_allowed = True
-                        break
-
-            if not is_allowed:
-                raise TypeError(
-                    f"{self.__class__.__name__} only allows children of types {allowed_names} "
-                    f"(or their subclasses), but got {type(child).__name__}"
-                )
-
-    def append(self, child: "BaseMenu") -> None:
-        """Appends a child node to the current menu.
-
-        Args:
-            child (BaseMenu): The child menu node.
-
-        Raises:
-            TypeError: If the child type is not allowed.
-        """
-        self._validate_child(child)
+        if self.has_url:
+            raise ValueError(
+                f"MenuItem '{self.name}' has a URL and cannot have children. "
+                f"Menu items must be EITHER a link OR a container, not both."
+            )
         child.parent = self  # type: ignore[has-type]
 
-    def extend(self, children: list["BaseMenu"]) -> None:
-        """Appends multiple child nodes to the current menu.
+    def extend(self, children: list["MenuItem"]) -> None:
+        """
+        Append multiple child menu items.
 
         Args:
-            children (List[BaseMenu]): A list of child nodes.
+            children: List of child menu items to append.
 
         Raises:
-            TypeError: If any child type is not allowed.
+            ValueError: If this item has a URL (cannot have both URL and children).
         """
-        # Validate all children first before adding any
-        for child in children:
-            self._validate_child(child)
-
-        # If validation passes, add all children
+        if self.has_url:
+            raise ValueError(
+                f"MenuItem '{self.name}' has a URL and cannot have children. "
+                f"Menu items must be EITHER a link OR a container, not both."
+            )
         for child in children:
             child.parent = self  # type: ignore[has-type]
 
     def insert(
         self,
-        children: Union["BaseMenu", list["BaseMenu"]],
+        children: "MenuItem | list[MenuItem]",
         position: int,
     ) -> None:
-        """Inserts child nodes at a specified position.
+        """
+        Insert child menu items at a specified position.
 
         Args:
-            children (Union[BaseMenu, List[BaseMenu]]): A child or list of child nodes.
-            position (int): Position to insert at.
+            children: A child or list of children to insert.
+            position: Position index to insert at.
 
         Raises:
-            TypeError: If any child type is not allowed.
+            ValueError: If this item has a URL (cannot have both URL and children).
         """
+        if self.has_url:
+            raise ValueError(
+                f"MenuItem '{self.name}' has a URL and cannot have children. "
+                f"Menu items must be EITHER a link OR a container, not both."
+            )
+
         if not isinstance(children, list):
             children = [children]
-
-        # Validate all children first
-        for child in children:
-            self._validate_child(child)
 
         old = list(self.children)  # type: ignore[has-type]
         new = old[:position] + children + old[position:]
         self.children = new
 
-    def insert_after(self, child: "BaseMenu", named: str) -> None:
-        """Inserts a child node after an existing child with a specified name.
+    def insert_after(self, child: "MenuItem", named: str) -> None:
+        """
+        Insert a child menu item after an existing child with specified name.
 
         Args:
-            child (BaseMenu): The new child node to insert.
-            named (str): The name of the existing child after which to insert.
+            child: The new child menu item to insert.
+            named: The name of the existing child after which to insert.
 
         Raises:
-            ValueError: If no child with the specified name exists.
-            TypeError: If the child is not a valid menu item or allowed type.
+            ValueError: If no child with specified name exists or if this item has a URL.
         """
-        self._validate_child(child)
+        if self.has_url:
+            raise ValueError(
+                f"MenuItem '{self.name}' has a URL and cannot have children. "
+                f"Menu items must be EITHER a link OR a container, not both."
+            )
 
         existing_child = self.get(named)
         if existing_child:
@@ -234,14 +311,15 @@ class BaseMenu(Node):
         else:
             raise ValueError(f"No child with name '{named}' found.")
 
-    def pop(self, name: str | None = None) -> "BaseMenu":
-        """Removes a child node or detaches the current node from its parent.
+    def pop(self, name: str | None = None) -> "MenuItem":
+        """
+        Remove a child node or detach the current node from its parent.
 
         Args:
-            name (Optional[str]): The name of the child to remove. If None, removes this node.
+            name: The name of the child to remove. If None, removes this node.
 
         Returns:
-            BaseMenu: The removed node.
+            The removed node.
 
         Raises:
             ValueError: If no child with the specified name exists.
@@ -256,16 +334,17 @@ class BaseMenu(Node):
         self.parent = None
         return self
 
-    def get(self, name: str, maxlevel: int | None = None) -> Optional["BaseMenu"]:
-        """Finds a child node by name.
+    def get(self, name: str, maxlevel: int | None = None) -> Optional["MenuItem"]:
+        """
+        Find a child node by name.
 
         Args:
-            name (str): The name of the child node to find.
-            maxlevel (Optional[int]): The maximum depth to search.
-                                     1 = direct children only, 2 = children and grandchildren, etc.
+            name: The name of the child node to find.
+            maxlevel: The maximum depth to search.
+                     1 = direct children only, 2 = children and grandchildren, etc.
 
         Returns:
-            Optional[BaseMenu]: The child node, or None if not found.
+            The child node, or None if not found.
         """
         if not name:
             return None
@@ -278,129 +357,223 @@ class BaseMenu(Node):
         return result  # type: ignore[no-any-return]
 
     def print_tree(self) -> str:
-        """Prints the menu tree structure.
+        """
+        Print the menu tree structure.
 
         Returns:
-            str: A string representation of the tree.
+            A string representation of the tree.
         """
         result = RenderTree(self).by_attr("name")
         return str(result)
 
-    def process(self, request, **kwargs) -> "BaseMenu":
-        """Processes the visibility of the menu based on a request.
-
-        Returns a processed copy to avoid race conditions between concurrent requests.
-
-        Args:
-            request: The HTTP request object.
-            **kwargs: Additional arguments for the check function.
-
-        Returns:
-            BaseMenu: A processed copy of this menu with request-specific state.
-        """
-        # Create a shallow copy to avoid mutating the shared instance
-        processed = self._create_request_copy()
-        processed.request = request
-        processed.visible = processed.check(request, **kwargs)
-        return processed
-
-    def _create_request_copy(self) -> "BaseMenu":
-        """Create a shallow copy for request processing without copying children."""
-        # Create new instance with same configuration but fresh state
-        copy_instance = self.__class__(
-            name=self.name,
-            check=self._check,
-            extra_context=self.extra_context.copy(),
-        )
-        # Copy static attributes but not request-specific state
-        for attr in ["params", "view_name", "_url", "template_name"]:
-            if hasattr(self, attr):
-                setattr(copy_instance, attr, getattr(self, attr))
-        return copy_instance
+    # ========== Visibility and Processing ==========
 
     def check(self, request, **kwargs) -> bool:
-        """Checks if the menu item is visible based on the request.
+        """
+        Check if the menu item is visible based on the request.
 
         Args:
             request: The HTTP request object.
             **kwargs: Additional arguments for custom check functions.
 
         Returns:
-            bool: True if the menu item is visible, False otherwise.
+            True if the menu item is visible, False otherwise.
         """
         if callable(self._check):
             result = self._check(request, **kwargs)
             return bool(result)
         return bool(self._check)
 
-    def get_context_data(self, **kwargs) -> dict:
+    def process(self, request, **kwargs) -> "MenuItem":
         """
-        Get context data for template rendering.
+        Process the menu item for a specific request.
 
-        This method mirrors Django's View.get_context_data() pattern and can be
-        overridden in subclasses to provide dynamic, request-aware context data.
+        Creates a processed copy with request-specific state to avoid race conditions.
+        For items with children, recursively processes all children.
 
         Args:
-            **kwargs: Additional context data passed from the caller.
+            request: The HTTP request object.
+            **kwargs: Additional arguments passed to check functions and URL resolution.
 
         Returns:
-            dict: A dictionary containing context data for template rendering.
-                 Includes the menu instance itself and any extra_context.
+            A processed copy of this menu item with request-specific state.
         """
-        context = {
-            "menu": self,
-            **self.extra_context,
-            **kwargs,
-        }
-        return context
+        # Create shallow copy to avoid mutating the shared instance
+        processed = self._create_request_copy()
+        processed.request = request
+        processed.visible = processed.check(request, **kwargs)
 
-    def get_template_names(self) -> list[str]:
+        if not processed.visible:
+            return processed
+
+        # Resolve URL if this item has one
+        if processed.has_url:
+            processed.url = processed.resolve_url(**kwargs)
+            if not processed.url:
+                # If URL cannot be resolved, check if this is a parent
+                # Parents without URLs are allowed, but leaf nodes need resolvable URLs
+                if not processed.has_children:
+                    processed.visible = False
+                    return processed
+            else:
+                # URL resolved successfully, check if it matches current path
+                processed.match_url()
+
+        # Process children if this is a parent
+        # Use _original_children if available (from copy), otherwise use self.children
+        children_to_process = getattr(processed, "_original_children", processed.children)
+        if children_to_process:
+            processed_children = []
+            for child in children_to_process:
+                processed_child = child.process(request, **kwargs)
+                if processed_child.visible:
+                    # Attach processed child to processed parent to maintain tree structure
+                    processed_child.parent = processed
+                    processed_children.append(processed_child)
+
+            # Store processed children
+            processed._processed_children = processed_children
+
+            # If this is a container (no URL) with no visible children, hide it
+            if not processed.has_url and not processed_children:
+                processed.visible = False
+
+        return processed
+
+    def _create_request_copy(self) -> "MenuItem":
         """
-        Get the template names for rendering this menu.
+        Create a shallow copy for request processing.
 
-        Returns:
-            List[str]: A list of template paths for rendering.
-
-        Raises:
-            NotImplementedError: If template_name is None, indicating that subclasses
-                                must define a template_name.
+        Creates a copy that maintains the tree structure so depth calculations work.
+        The copy will be detached from the global root but maintain proper parent-child relationships.
         """
-        if self.template_name is None:
-            raise NotImplementedError(
-                f"{self.__class__.__name__} must define a 'template_name' class attribute. "
-                f"Set template_name = 'path/to/template.html' in your class definition."
-            )
-        return [self.template_name]
+        # If this has a parent (and it's not the global root), recursively copy parent first
+        # This ensures the copy maintains proper depth in the tree
+        if self.parent and self.parent.name != "DjangoFlexMenu":
+            parent_copy = _NO_PARENT  # Will be set when parent processes us as a child
+        else:
+            parent_copy = _NO_PARENT  # Top-level or root
 
-    def render(self, **kwargs):
-        """
-        Render the menu using its template and context data.
-
-        The template receives the menu/item instance in context and can
-        recursively render children by calling child.render() in a loop.
-
-        Args:
-            **kwargs: Additional context data passed to get_context_data().
-
-        Returns:
-            str: The rendered HTML string, or empty string if not visible.
-        """
-        if not self.visible:
-            return ""
-
-        context = self.get_context_data(**kwargs)
-        return mark_safe(
-            render_to_string(
-                self.get_template_names(),
-                context,
-            )
+        # Create copy with detached parent (will be attached by parent's processing)
+        copy_instance = self.__class__(
+            name=self.name,
+            view_name=self.view_name,
+            url=self._url,
+            params=self.params.copy() if self.params else None,
+            parent=parent_copy,
+            check=self._check,
+            extra_context=self.extra_context.copy(),
+            # Don't pass children yet - they'll be processed and added during process()
         )
 
-    def match_url(self) -> bool:
-        """Checks if the menu item's URL matches the request path.
+        # Store reference to original children for processing
+        # We'll iterate over these in process() and add processed copies as children
+        copy_instance._original_children = self.children  # type: ignore[assignment]
+
+        return copy_instance
+
+    # ========== URL Resolution ==========
+
+    def resolve_url(self, *args, **kwargs) -> str | None:
+        """
+        Resolve the URL for this menu item.
+
+        Supports three types of URLs:
+        - Django view names (resolved via reverse())
+        - Static URL strings
+        - Callable functions that return URLs
+
+        Args:
+            *args: Positional arguments for URL resolution.
+            **kwargs: Keyword arguments for URL resolution. Extra kwargs not needed
+                     for the URL pattern will be filtered out automatically.
 
         Returns:
-            bool: True if the URL matches the request path, False otherwise.
+            The resolved URL string, or None if resolution fails.
+        """
+        # Check for cached URL (only for static URLs with no args/kwargs)
+        if not args and not kwargs and hasattr(self, "_cached_url"):
+            return self._cached_url
+
+        # Resolve Django view name
+        if self.view_name:
+            # Always try to filter kwargs to only include those needed by the URL pattern
+            # This allows passing extra context (like object instances) alongside URL params
+            filtered_kwargs = kwargs
+            if kwargs:
+                try:
+                    param_names = set(get_required_url_params(self.view_name))
+                    logger_instance = logging.getLogger(__name__)
+                    logger_instance.debug(
+                        f"URL param extraction for '{self.view_name}': param_names={param_names}, kwargs={list(kwargs.keys())}"
+                    )
+                    if param_names:
+                        # Only pass kwargs that are in the URL pattern
+                        filtered_kwargs = {k: v for k, v in kwargs.items() if k in param_names}
+                        logger_instance.debug(f"Filtered kwargs for '{self.view_name}': {list(filtered_kwargs.keys())}")
+                except NoReverseMatch:
+                    # Pattern not found, use all kwargs
+                    logger_instance = logging.getLogger(__name__)
+                    logger_instance.debug(f"Could not find URL pattern for '{self.view_name}', using all kwargs")
+
+            try:
+                url = reverse(self.view_name, args=args, kwargs=filtered_kwargs)
+                # Cache static URLs for reuse
+                if not args and not kwargs:
+                    self._cached_url = url
+                return url
+            except NoReverseMatch as e:
+                # Only log if explicitly configured to do so
+                if _should_log_url_failures():
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Could not reverse URL for view '{self.view_name}' in menu item '{self.name}'")
+                    logger.warning(f"Reverse error: {e}")
+                    try:
+                        param_names_for_log = set(get_required_url_params(self.view_name))
+                        if param_names_for_log:
+                            logger.warning(f"Detected URL params: {param_names_for_log}")
+                            logger.warning(f"Filtered kwargs: {filtered_kwargs}")
+                        else:
+                            logger.warning(f"Could not detect URL params - passed all kwargs: {list(kwargs.keys())}")
+                    except NoReverseMatch:
+                        logger.warning(f"Could not detect URL params - passed all kwargs: {list(kwargs.keys())}")
+                # Cache failure for static URLs
+                if not args and not kwargs:
+                    self._cached_url = None
+                return None
+
+        # Callable URL function
+        elif self._url and callable(self._url):
+            try:
+                return self._url(self.request, *args, **kwargs)  # type: ignore[no-any-return]
+            except Exception as e:
+                # Only log if explicitly configured to do so
+                if _should_log_url_failures():
+                    logger = logging.getLogger(__name__)
+                    logger.warning(f"Error calling URL function for menu item '{self.name}': {e}")
+                return None
+
+        # Static URL string
+        elif self._url:
+            static_url: str = self._url
+            if self.params:
+                query_string = urlencode(self.params)
+                separator = "&" if "?" in static_url else "?"
+                static_url = static_url + separator + query_string
+
+            # Cache static URLs for reuse (when no args/kwargs)
+            if not args and not kwargs:
+                self._cached_url = static_url
+            return static_url
+
+        return None
+
+    def match_url(self) -> bool:
+        """
+        Check if the menu item's URL matches the request path.
+
+        Returns:
+            True if the URL matches the request path, False otherwise.
         """
         url = getattr(self, "url", None)
         if not url or not self.request:
@@ -410,313 +583,88 @@ class BaseMenu(Node):
         self.selected = url == self.request.path
         return self.selected
 
-    def copy(self) -> "BaseMenu":
-        """Creates a deep copy of the menu.
 
-        Warning: This operation is expensive and should be avoided during
-        request processing. Use only for menu setup/configuration.
-
-        Returns:
-            BaseMenu: A new deep copy of the current menu.
-        """
-        return copy.deepcopy(self)
+# Global root menu instance
+root = MenuItem("DjangoFlexMenu", parent=_NO_PARENT)
 
 
-root = BaseMenu(name="DjangoFlexMenu")
+class Menu(MenuItem):
+    """
+    Top-level menu container that automatically registers itself to the root.
 
-# Sentinel value to distinguish between "no parent specified" and "explicitly no parent"
-_NO_PARENT = object()
+    This is a convenience class for defining menus. It's functionally identical
+    to MenuItem but automatically attaches to the global root menu.
 
+    Example:
+        # Define a navigation menu
+        NavMenu = Menu(
+            "main_nav",
+            children=[
+                MenuItem(name="home", label="Home", view_name="home"),
+                MenuItem(name="about", label="About", view_name="about"),
+            ]
+        )
 
-class MenuLink(BaseMenu):
-    template_name = "menu/item.html"
+        # Use in template
+        {% render_menu 'main_nav' renderer='bootstrap5' %}
+    """
 
     def __init__(
         self,
         name: str,
-        view_name: str = "",
-        url: str = "",
-        params: dict | None = None,
-        template_name: str | None = None,
+        children: list["MenuItem"] | None = None,
+        check: Callable | bool = True,
         extra_context: dict | None = None,
         **kwargs,
     ):
-        if not url and not view_name:
-            raise ValueError("Either a url or view_name must be provided")
-        self.params = params or {}
-        self.view_name = view_name
-        self._url = url
-        self.url = None  # Will be set during processing
-
-        super().__init__(
-            name,
-            template_name=template_name,
-            extra_context=extra_context,
-            **kwargs,
-        )
-
-    def process(self, request, **kwargs):
-        # Create processed copy to avoid race conditions
-        processed = self._create_request_copy()
-        processed.request = request
-        processed.visible = processed.check(request, **kwargs)
-
-        if not processed.visible:
-            # didn't pass the check, no need to continue
-            return processed
-
-        # if the menu is visible, make sure the url is resolvable
-        processed.url = processed.resolve_url(**kwargs)
-        if processed.url:
-            processed.match_url()
-        else:
-            # If URL cannot be resolved, hide the menu item
-            processed.visible = False
-
-        return processed
-
-    def resolve_url(self, *args, **kwargs):
-        # Simple caching for static URLs (no args/kwargs)
-        if not args and not kwargs and hasattr(self, "_cached_url"):
-            return self._cached_url
-
-        if self.view_name:
-            try:
-                url = reverse(self.view_name, args=args, kwargs=kwargs)
-                # Cache static URLs for reuse
-                if not args and not kwargs:
-                    self._cached_url = url
-                return url
-            except NoReverseMatch:
-                # Only log if explicitly configured to do so
-                if _should_log_url_failures():
-                    logger = logging.getLogger(__name__)
-                    logger.warning(f"Could not reverse URL for view '{self.view_name}' in menu item '{self.name}'")
-                # Cache failure for static URLs
-                if not args and not kwargs:
-                    self._cached_url = None
-                return None
-
-        elif self._url and callable(self._url):
-            try:
-                return self._url(self.request, *args, **kwargs)
-            except Exception as e:
-                # Only log if explicitly configured to do so
-                if _should_log_url_failures():
-                    logger = logging.getLogger(__name__)
-                    logger.warning(f"Error calling URL function for menu item '{self.name}': {e}")
-                return None
-
-        elif self._url:
-            if self.params:
-                query_string = urlencode(self.params)
-                separator = "&" if "?" in self._url else "?"
-                url = self._url + separator + query_string
-            else:
-                url = self._url
-
-            # Cache static URLs for reuse (when no args/kwargs)
-            if not args and not kwargs:
-                self._cached_url = url
-            return url
-
-        return None
-
-    def get_context_data(self, **kwargs) -> dict:
         """
-        Get context data for template rendering.
-
-        Extends the base implementation to include URL and selection information.
+        Initialize a top-level menu.
 
         Args:
-            **kwargs: Additional context data passed from the caller.
+            name: Unique identifier for this menu.
+            children: List of child menu items.
+            check: Callable(request, **kwargs) -> bool or boolean value.
+            extra_context: Additional context for template rendering.
+            **kwargs: Additional attributes for the node.
 
-        Returns:
-            dict: A dictionary containing context data for template rendering.
+        Note:
+            Menu instances are always attached to the global root and cannot
+            have URLs (they are containers only).
         """
-        context = super().get_context_data(**kwargs)
-        context.update(
-            {
-                "url": getattr(self, "url", None),
-                "is_selected": getattr(self, "selected", False),
-                "view_name": getattr(self, "view_name", ""),
-                "params": getattr(self, "params", {}),
-            }
-        )
-        return context
-
-    def _create_request_copy(self) -> "MenuLink":
-        """Create a shallow copy for request processing without copying children."""
-        # Create new instance with same configuration but fresh state
-        copy_instance = self.__class__(
-            name=self.name,
-            view_name=self.view_name,
-            url=self._url,
-            params=self.params,
-            check=self._check,
-            extra_context=self.extra_context.copy(),
-        )
-        # Copy additional attributes
-        for attr in ["template_name", "_cached_url"]:
-            if hasattr(self, attr):
-                setattr(copy_instance, attr, getattr(self, attr))
-        return copy_instance
-
-
-class MenuItem(BaseMenu):
-    """A menu item that doesn't provide a link - used for non-clickable menu items like headers or separators."""
-
-    template_name = None
-
-    def __init__(
-        self,
-        name: str,
-        template_name: str | None = None,
-        extra_context: dict | None = None,
-        **kwargs,
-    ):
+        # Always attach to root, never have URL
         super().__init__(
-            name,
-            template_name=template_name,
+            name=name,
+            parent=root,
+            children=children,
+            check=check,
             extra_context=extra_context,
             **kwargs,
         )
 
     def _create_request_copy(self) -> "MenuItem":
-        """Create a shallow copy for request processing without copying children."""
-        copy_instance = self.__class__(
+        """
+        Create a shallow copy for request processing.
+
+        Override parent's method to use MenuItem constructor directly,
+        avoiding the Menu class's automatic parent=root assignment.
+        """
+        if self.parent and self.parent.name != "DjangoFlexMenu":
+            parent_copy = _NO_PARENT
+        else:
+            parent_copy = _NO_PARENT
+
+        # Use MenuItem directly, not self.__class__, to avoid Menu's parent=root
+        copy_instance = MenuItem(
             name=self.name,
+            view_name=self.view_name,
+            url=self._url,
+            params=self.params.copy() if self.params else None,
+            parent=parent_copy,
             check=self._check,
             extra_context=self.extra_context.copy(),
         )
-        # Copy template attribute
-        copy_instance.template_name = getattr(self, "template_name", "")
+
+        # Store reference to original children for processing
+        copy_instance._original_children = self.children  # type: ignore[assignment]
+
         return copy_instance
-
-
-class MenuGroup(BaseMenu):
-    template_name = "menu/menu.html"
-
-    def __init__(
-        self,
-        name,
-        parent=None,
-        children=None,
-        template_name=None,
-        extra_context=None,
-        **kwargs,
-    ):
-        if parent is None:
-            parent = root
-        elif parent is _NO_PARENT:
-            parent = None
-        super().__init__(
-            name,
-            parent,
-            children,
-            template_name=template_name,
-            extra_context=extra_context,
-            **kwargs,
-        )
-        self._processed_children = []
-
-    def process(self, request, **kwargs):
-        # Create processed copy to avoid race conditions
-        processed = self._create_request_copy()
-        processed.request = request
-
-        # Process children and attach to processed copy
-        processed_children = []
-        for child in self.children:
-            processed_child = child.process(request, **kwargs)
-            if processed_child and processed_child.visible:  # Only include visible children
-                processed_children.append(processed_child)
-
-        # Set children on processed copy (avoiding anytree parent/child mutation)
-        processed._processed_children = processed_children
-
-        # Now check visibility based on processed children
-        processed.visible = processed.check(request, **kwargs)
-
-        return processed
-
-    @property
-    def processed_children(self):
-        """
-        Public property to access processed children for templates.
-        Falls back to regular children if no processed children exist.
-        """
-        return getattr(self, "_processed_children", self.children)
-
-    def get_context_data(self, **kwargs) -> dict:
-        """
-        Get context data for template rendering.
-
-        Extends the base implementation to include processed children information.
-
-        Args:
-            **kwargs: Additional context data passed from the caller.
-
-        Returns:
-            dict: A dictionary containing context data for template rendering.
-        """
-        context = super().get_context_data(**kwargs)
-        context.update(
-            {
-                "children": self.processed_children,
-                "has_visible_children": bool(self.processed_children),
-            }
-        )
-        return context
-
-    def _create_request_copy(self) -> "MenuGroup":
-        """Create a shallow copy for request processing."""
-        copy_instance = self.__class__(
-            name=self.name,
-            check=self._check,
-            parent=_NO_PARENT,  # Explicitly no parent to avoid auto-adding to root
-            extra_context=self.extra_context.copy(),
-        )
-        # Copy template attribute
-        copy_instance.template_name = getattr(self, "template_name", "")
-        copy_instance._processed_children = []
-        return copy_instance
-
-    def check(self, request, **kwargs) -> bool:
-        """
-        Check if the menu should be visible.
-
-        For processed copies, check children from _processed_children.
-        For original instances, check actual children.
-
-        Args:
-            request: The HTTP request object.
-            **kwargs: Additional arguments.
-
-        Returns:
-            bool: True if menu should be visible, False otherwise.
-        """
-        # First check the menu's own check function
-        own_check_result = super().check(request, **kwargs)
-        if not own_check_result:
-            return False
-
-        # If the menu's own check passes, check if it has visible children
-        children_to_check = getattr(self, "_processed_children", self.children)
-        if not children_to_check:
-            return False
-
-        return any(child.check(request, **kwargs) for child in children_to_check)
-
-    def match_url(self) -> bool:
-        """
-        Check if any child menu item matches the current URL.
-
-        Returns:
-            bool: True if any child is selected, False otherwise.
-        """
-        if not hasattr(self, "request") or not self.request:
-            return False
-
-        children_to_check = getattr(self, "_processed_children", self.children)
-        return any(child.match_url() for child in children_to_check)

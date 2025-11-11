@@ -1,3 +1,3 @@
-from .menu import MenuGroup, MenuItem, MenuLink, root
+from .menu import Menu, MenuItem, root
 
-__all__ = ["MenuGroup", "MenuLink", "MenuItem", "root"]
+__all__ = ["Menu", "MenuItem", "root"]
