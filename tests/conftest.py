@@ -7,8 +7,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.test import RequestFactory, override_settings
 
-from flex_menu import root
-from flex_menu.menu import BaseMenu, MenuGroup, MenuLink
+from flex_menu import MenuItem, root
 
 
 @pytest.fixture
@@ -118,56 +117,80 @@ def user_with_group(user):
 
 
 @pytest.fixture
-def base_menu():
-    """Creates a basic BaseMenu instance."""
-    return BaseMenu(name="test_base_menu")
-
-
-@pytest.fixture
-def menu():
-    """Creates a basic MenuGroup instance."""
-    return MenuGroup(name="test_menu")
-
-
-@pytest.fixture
-def menu_item():
-    """Creates a basic MenuLink instance."""
-    return MenuLink(name="test_item", url="/test/")
+def simple_menu_item():
+    """Creates a basic MenuItem instance with URL."""
+    return MenuItem(
+        name="test_item", url="/test/", extra_context={"label": "Test Item"}
+    )
 
 
 @pytest.fixture
 def menu_item_with_view():
-    """Creates a MenuLink with a view name."""
-    return MenuLink(name="test_item_view", view_name="admin:index")
+    """Creates a MenuItem with a view name."""
+    return MenuItem(
+        name="test_item_view", view_name="admin:index", extra_context={"label": "Admin"}
+    )
 
 
 @pytest.fixture
-def complex_menu_tree(menu):
+def parent_menu_item():
+    """Creates a MenuItem with children."""
+    return MenuItem(
+        name="parent_menu",
+        extra_context={"label": "Parent Menu"},
+        children=[
+            MenuItem(name="child1", url="/child1/", extra_context={"label": "Child 1"}),
+            MenuItem(name="child2", url="/child2/", extra_context={"label": "Child 2"}),
+        ],
+    )
+
+
+@pytest.fixture
+def complex_menu_tree():
     """Creates a complex menu tree for testing."""
-    # Root menu
-    home = MenuLink(name="home", url="/", label="Home")
-    about = MenuLink(name="about", url="/about/", label="About")
-
-    # Submenu with children
-    products_menu = MenuGroup(name="products", label="Products")
-    product1 = MenuLink(name="product1", url="/products/1/", label="Product 1")
-    product2 = MenuLink(name="product2", url="/products/2/", label="Product 2")
-
-    # Admin section
-    admin_menu = MenuGroup(name="admin", label="Admin")
-    admin_users = MenuLink(
-        name="admin_users", view_name="admin:auth_user_changelist", label="Users"
+    # Build tree structure
+    return MenuItem(
+        name="main_menu",
+        extra_context={"label": "Main Menu"},
+        children=[
+            MenuItem(name="home", url="/", extra_context={"label": "Home"}),
+            MenuItem(name="about", url="/about/", extra_context={"label": "About"}),
+            # Products submenu
+            MenuItem(
+                name="products",
+                extra_context={"label": "Products"},
+                children=[
+                    MenuItem(
+                        name="product1",
+                        url="/products/1/",
+                        extra_context={"label": "Product 1"},
+                    ),
+                    MenuItem(
+                        name="product2",
+                        url="/products/2/",
+                        extra_context={"label": "Product 2"},
+                    ),
+                ],
+            ),
+            # Admin submenu
+            MenuItem(
+                name="admin",
+                extra_context={"label": "Admin"},
+                children=[
+                    MenuItem(
+                        name="admin_users",
+                        view_name="admin:auth_user_changelist",
+                        extra_context={"label": "Users"},
+                    ),
+                    MenuItem(
+                        name="admin_groups",
+                        view_name="admin:auth_group_changelist",
+                        extra_context={"label": "Groups"},
+                    ),
+                ],
+            ),
+        ],
     )
-    admin_groups = MenuLink(
-        name="admin_groups", view_name="admin:auth_group_changelist", label="Groups"
-    )
-
-    # Build tree
-    menu.extend([home, about, products_menu, admin_menu])
-    products_menu.extend([product1, product2])
-    admin_menu.extend([admin_users, admin_groups])
-
-    return menu
 
 
 @pytest.fixture(autouse=True)
