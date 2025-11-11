@@ -29,18 +29,24 @@ def prerelease(c):
     Run comprehensive pre-release checks and update all required files.
 
     This task performs all necessary steps to prepare the repository for release:
-    1. Run linting and formatting (including poetry-lock hook)
-    2. Run all quality checks and tests
+    1. Run linting, formatting, type checking, and dependency checks via pre-commit hooks
+    2. Run quality checks and tests
     3. Update requirements.txt
 
     Use this before running the release task to ensure everything is ready.
+
+    Pre-commit hooks include:
+    - Code formatting (Black, Ruff)
+    - Type checking (mypy)
+    - Dependency analysis (deptry)
+    - Poetry validation
     """
     print("🚀 Starting comprehensive pre-release checks...")
     print("=" * 60)
 
-    # Step 1: Run comprehensive linting and type checking (including poetry-lock)
-    print("\n🧹 Step 1: Running comprehensive linting and type checking")
-    print("🚀 Running pre-commit hooks")
+    # Step 1: Run comprehensive linting, type checking, and dependency analysis
+    print("\n🧹 Step 1: Running comprehensive linting, type checking, and dependency analysis")
+    print("🚀 Running pre-commit hooks (includes mypy and deptry)")
     c.run("poetry run pre-commit run -a")
 
     print("🚀 Running manual pre-commit hooks (poetry-lock, poetry-export)")
@@ -51,16 +57,10 @@ def prerelease(c):
     print("🚀 Checking Poetry lock file consistency with 'pyproject.toml'")
     c.run("poetry check --lock")
 
-    print("🚀 Static type checking with mypy")
-    c.run("poetry run mypy")
-
-    print("🚀 Checking for obsolete dependencies with deptry")
-    c.run("poetry run deptry .")
-
     # Step 3: Run comprehensive test suite
     print("\n🧪 Step 3: Running comprehensive test suite")
     print("🚀 Running pytest with coverage")
-    c.run("poetry run pytest --cov --cov-config=pyproject.toml --cov-report=html")
+    c.run("poetry run pytest --cov --cov-config=pyproject.toml --cov-report=html --cov-report=term --tb=no -qq")
 
     # Step 4: Update requirements.txt (final step)
     print("\n📦 Step 4: Updating requirements.txt")

@@ -36,9 +36,25 @@ repos:
         args: ["-o", "requirements.txt", "--with=dev", "--without-hashes"]
         stages: [manual]  # Only run manually, not in CI
 
+  # Local hooks
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: poetry run mypy
+        language: system
+        types: [python]
+        files: ^src/
+  - repo: local
+    hooks:
+      - id: deptry
+        name: deptry
+        entry: poetry run deptry .
+        language: system
+        pass_filenames: false
 
 # sets up .pre-commit-ci.yaml to ensure pre-commit dependencies stay up to date
 ci:
   autoupdate_schedule: weekly
-  skip: [poetry-lock, poetry-export]  # Skip file-modifying hooks in CI
+  skip: [poetry-lock, poetry-export, mypy, deptry]  # Skip file-modifying hooks and slow hooks in CI
   submodules: false
