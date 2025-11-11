@@ -16,6 +16,7 @@
 */.ipynb_checkpoints/*
 .DS_Store
 .vscode/
+.github/instructions/
 
 # Unittest and coverage
 htmlcov
