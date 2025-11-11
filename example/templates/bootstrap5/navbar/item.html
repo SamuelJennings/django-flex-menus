@@ -1,15 +1,28 @@
 {% comment %}
-Bootstrap 5 Navbar Item Template
-Usage: Set as template for MenuLink class for navbar links
+Bootstrap 5 Navbar Item Template (Depth 1, Leaf)
+Top-level navbar link without children
 {% endcomment %}
 
-{% if menu.visible %}
-<li class="nav-item">
-  <a class="nav-link{% if is_selected %} active{% endif %}" href="{{ url }}" {% if is_selected %}aria-current="page" {% endif %}>
-    {% if icon %}
-    <i class="{{ icon }} me-1"></i>
+{% if item.visible %}
+  <li class="nav-item{% if item.selected %} active{% endif %}">
+    {% if item.url %}
+      <a class="nav-link"
+         href="{{ item.url }}"
+         {% if item.selected %}
+           aria-current="page"
+         {% endif %}>
+        {% if item.extra_context.icon %}
+          <i class="{{ item.extra_context.icon }} me-1"></i>
+        {% endif %}
+    {{ item.extra_context.label|default:item.name }}
+      </a>
+    {% else %}
+      <span class="nav-link disabled">
+        {% if item.extra_context.icon %}
+          <i class="{{ item.extra_context.icon }} me-1"></i>
+        {% endif %}
+    {{ item.extra_context.label|default:item.name }}
+      </span>
     {% endif %}
-    {{ label|default:menu.name }}
-  </a>
-</li>
+  </li>
 {% endif %}

@@ -1,0 +1,26 @@
+{% comment %}
+Bootstrap 5 Sidebar Sub-Item Template (Depth 2+, Leaf)
+Nested sidebar link (child of collapsible group)
+{% endcomment %}
+
+{% if item.visible %}
+  {% if item.url %}
+    <a href="{{ item.url }}"
+       class="list-group-item list-group-item-action
+              {% if item.selected %}
+                active
+              {% endif %}">
+      {% if item.extra_context.icon %}
+        <i class="{{ item.extra_context.icon }} me-2"></i>
+      {% endif %}
+    {{ item.extra_context.label|default:item.name }}
+    </a>
+  {% else %}
+    <div class="list-group-item disabled">
+      {% if item.extra_context.icon %}
+        <i class="{{ item.extra_context.icon }} me-2"></i>
+      {% endif %}
+    {{ item.extra_context.label|default:item.name }}
+    </div>
+  {% endif %}
+{% endif %}

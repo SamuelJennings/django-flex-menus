@@ -1,24 +1,24 @@
+{% load flex_menu %}
+
 {% comment %}
-Bootstrap 5 Navbar Dropdown Menu Template
-Usage: Set as template for Menu class that should render as dropdowns
+Bootstrap 5 Navbar Dropdown Template (Depth 1, Parent)
+Top-level navbar dropdown with children
 {% endcomment %}
 
-{% if menu.visible and has_visible_children %}
-  <li class="nav-item dropdown">
-    <a class="nav-link dropdown-toggle"
-       href="#"
-       role="button"
-       data-bs-toggle="dropdown"
-       aria-expanded="false">
-      {% if icon %}
-        <i class="{{ icon }} me-1"></i>
-      {% endif %}
-    {{ label|default:menu.name }}
-    </a>
-    <ul class="dropdown-menu">
-      {% for child in children %}
-    {{ child.render }}
-      {% endfor %}
-    </ul>
-  </li>
+{% if item.visible and item.visible_children %}
+<li class="nav-item dropdown">
+  <a class="nav-link dropdown-toggle{% if item.selected %} active{% endif %}"
+     href="#"
+     role="button"
+     data-bs-toggle="dropdown"
+     aria-expanded="false">
+    {% if item.extra_context.icon %}<i class="{{ item.extra_context.icon }} me-1"></i>{% endif %}
+    {{ item.extra_context.label|default:item.name }}
+  </a>
+  <ul class="dropdown-menu">
+    {% for child in item.visible_children %}
+      {% render_item child renderer=renderer %}
+    {% endfor %}
+  </ul>
+</li>
 {% endif %}

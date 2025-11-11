@@ -1,6 +1,8 @@
 from django.urls import path
 from django.views.generic import TemplateView
 
+from .views import ContextMenuDemoView
+
 
 def view(title):
     return TemplateView.as_view(template_name="base.html", extra_context={"title": title})
@@ -15,4 +17,10 @@ urlpatterns = [
     path("services/web-design/", view("web design"), name="web_design"),
     path("services/development/", view("development"), name="development"),
     path("services/consulting/", view("consulting"), name="consulting"),
+    # Context menu demonstration
+    path(
+        "demo/context-menus/<slug:slug>/",
+        ContextMenuDemoView.as_view(),
+        name="context_menu_demo",
+    ),
 ]

@@ -1,15 +1,28 @@
 {% comment %}
-Bootstrap 5 Navbar Dropdown Item Template
-Usage: Set as template for MenuLink class within dropdown menus
+Bootstrap 5 Navbar Dropdown Item Template (Depth 2, Leaf)
+Dropdown menu item (child of dropdown)
 {% endcomment %}
 
-{% if menu.visible %}
-<li>
-  <a class="dropdown-item{% if is_selected %} active{% endif %}" href="{{ url }}">
-    {% if icon %}
-    <i class="{{ icon }} me-2"></i>
+{% if item.visible %}
+  <li>
+    {% if item.url %}
+      <a class="dropdown-item
+                {% if item.selected %}
+                  active
+                {% endif %}"
+         href="{{ item.url }}">
+        {% if item.extra_context.icon %}
+          <i class="{{ item.extra_context.icon }} me-2"></i>
+        {% endif %}
+    {{ item.extra_context.label|default:item.name }}
+      </a>
+    {% else %}
+      <span class="dropdown-item disabled">
+        {% if item.extra_context.icon %}
+          <i class="{{ item.extra_context.icon }} me-2"></i>
+        {% endif %}
+    {{ item.extra_context.label|default:item.name }}
+      </span>
     {% endif %}
-    {{ label|default:menu.name }}
-  </a>
-</li>
+  </li>
 {% endif %}

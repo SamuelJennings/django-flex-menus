@@ -1,0 +1,32 @@
+{% comment %}
+Bootstrap 5 Navbar Container Template (Depth 0)
+Wraps the entire navbar structure
+{% endcomment %}
+
+{% load flex_menu %}
+
+{% if item.visible %}
+  <nav class="navbar navbar-expand-lg navbar-light bg-light">
+    <div class="container-fluid">
+      {% if item.extra_context.brand %}
+        <a class="navbar-brand" href="#">{{ item.extra_context.brand }}</a>
+      {% endif %}
+      <button class="navbar-toggler"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#navbarNav"
+              aria-controls="navbarNav"
+              aria-expanded="false"
+              aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav">
+          {% for child in item.visible_children %}
+{% render_item child renderer=renderer %}
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </nav>
+{% endif %}

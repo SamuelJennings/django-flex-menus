@@ -1,0 +1,14 @@
+{% load flex_menu %}
+
+{% comment %}
+Bootstrap 5 Sidebar Container Template (Depth 0)
+Main wrapper for sidebar menu using list-group
+{% endcomment %}
+
+{% if item.visible and item.visible_children %}
+<div class="list-group list-group-flush">
+  {% for child in item.visible_children %}
+    {% render_item child renderer=renderer %}
+  {% endfor %}
+</div>
+{% endif %}

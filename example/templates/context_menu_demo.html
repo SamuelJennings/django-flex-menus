@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% load flex_menu %}
+
+{% block title %}
+Context-Specific Menus Demo
+{% endblock title %}
+
+{% block content %}
+  <div class="container my-4">
+    <div class="row">
+      <!-- Main Content -->
+      <div class="col-md-8">
+        <h2 class="mb-3">
+Context-Specific Menus Demo
+        </h2>
+
+        <div class="alert alert-info mb-4">
+          <strong>How It Works:</strong> The menu on the right changes dynamically based on the project's status.
+                Use the select below to change the status and watch the menu update.
+        </div>
+
+        <!-- Project Status Card -->
+        <div class="card mb-4">
+          <div class="card-header">
+            <h5 class="mb-0">
+{{ project.name }}
+            </h5>
+          </div>
+          <div class="card-body">
+            <form method="post">
+{% csrf_token %}
+              <div class="mb-3">
+                <label for="statusSelect" class="form-label fw-bold">
+Project Status
+                </label>
+                <select class="form-select"
+                        id="statusSelect"
+                        name="new_status"
+                        onchange="this.form.submit()">
+                  <option value="draft" {% if project.status == 'draft' %}selected{% endif %}>
+Draft
+                  </option>
+                  <option value="active" {% if project.status == 'active' %}selected{% endif %}>
+Active
+                  </option>
+                  <option value="archived"
+                          {% if project.status == 'archived' %}
+                            selected
+                          {% endif %}>
+Archived
+                  </option>
+                </select>
+                <div class="form-text">
+                                Change the status to see different menu items appear in the Project Actions panel.
+                  {% if project.is_public %}
+Project is currently public.
+                  {% else %}
+Project is currently private.
+                  {% endif %}
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <!-- Implementation Code -->
+        <div class="card">
+          <div class="card-header">
+            <h6 class="mb-0">
+Implementation
+            </h6>
+          </div>
+          <div class="card-body">
+            <p class="small text-muted mb-3">
+                        The <code>project</code> object is passed to the menu via kwargs, and each menu item's
+                        check function receives it to determine visibility.
+            </p>
+
+            <h6 class="small text-uppercase text-muted mb-2">
+Template Usage
+            </h6>
+            <pre class="bg-light p-2 rounded small mb-3"><code>{% templatetag openblock %} render_menu 'project_actions' project=project slug=project.slug renderer='sidebar' {% templatetag closeblock %}</code></pre>
+
+            <h6 class="small text-uppercase text-muted mb-2">
+Menu Definition
+            </h6>
+            <pre class="bg-light p-2 rounded small"><code>def check_project_editable(request, project=None, **kwargs):
+    """Only non-archived projects can be edited."""
+    return project and project.status != "archived"
+
+project_actions = Menu(
+    name="project_actions",
+    children=[
+        MenuItem("view_project", view_name="context_menu_demo",
+            extra_context={"label": "View Details"}),
+        MenuItem("edit_project", view_name="context_menu_demo",
+            check=check_project_editable,
+            extra_context={"label": "Edit Project"}),
+        MenuItem("publish_project", view_name="context_menu_demo",
+            check=lambda request, project=None, **kwargs:
+                project and project.status == "draft",
+            extra_context={"label": "Publish"}),
+        MenuItem("archive_project", view_name="context_menu_demo",
+            check=lambda request, project=None, **kwargs:
+                project and project.status == "active",
+            extra_context={"label": "Archive"}),
+    ],
+)</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sidebar Menu -->
+      <div class="col-md-4">
+        <div class="card position-sticky" style="top: 20px;">
+          <div class="card-header">
+            <h6 class="mb-0">
+Project Actions
+            </h6>
+            <small class="text-muted">Context-aware menu</small>
+          </div>
+          <div class="card-body">
+            <!-- Context-specific menu: changes based on project state -->
+{% render_menu 'project_actions' project=project slug=project.slug renderer='sidebar' %}
+          </div>
+          <div class="card-footer text-muted small">
+                    Visible items: {% process_menu 'project_actions' project=project slug=project.slug as menu %}{{ menu.visible_children|length }} of {{ menu.children|length }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <style>
+      pre code {
+          font-size: 0.85em;
+          display: block;
+      }
+
+      .form-select:focus {
+          border-color: #86b7fe;
+          box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+      }
+  </style>
+{% endblock content %}

@@ -47,3 +47,12 @@ DATABASES = {
     }
 }
 STATIC_URL = "/static/"
+
+# Django Flex Menus Configuration
+FLEX_MENUS = {
+    "renderers": {
+        "navbar": "example.renderers.Bootstrap5NavbarRenderer",
+        "sidebar": "example.renderers.Bootstrap5SidebarRenderer",
+    },
+    "log_url_failures": DEBUG,
+}

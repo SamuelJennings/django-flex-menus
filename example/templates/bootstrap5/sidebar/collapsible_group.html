@@ -1,0 +1,25 @@
+{% load flex_menu %}
+
+{% comment %}
+Bootstrap 5 Sidebar Collapsible Group Template (Depth 1, Parent)
+Top-level sidebar section with collapsible children
+{% endcomment %}
+
+{% if item.visible and item.visible_children %}
+<button class="list-group-item list-group-item-action{% if item.selected %} active{% endif %}"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#{{ item.name|slugify }}-submenu"
+        aria-expanded="{% if item.selected %}true{% else %}false{% endif %}">
+  {% if item.extra_context.icon %}<i class="{{ item.extra_context.icon }} me-2"></i>{% endif %}
+  {{ item.extra_context.label|default:item.name }}
+  <i class="bi bi-chevron-down float-end"></i>
+</button>
+<div class="collapse{% if item.selected %} show{% endif %}" id="{{ item.name|slugify }}-submenu">
+  <div class="list-group list-group-flush ps-3">
+    {% for child in item.visible_children %}
+      {% render_item child renderer=renderer %}
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
