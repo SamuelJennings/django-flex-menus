@@ -55,6 +55,6 @@ repos:
 
 # sets up .pre-commit-ci.yaml to ensure pre-commit dependencies stay up to date
 ci:
-  autoupdate_schedule: weekly
+  autoupdate_schedule: monthly
   skip: [poetry-lock, poetry-export, mypy, deptry]  # Skip file-modifying hooks and slow hooks in CI
   submodules: false
