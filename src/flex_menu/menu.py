@@ -18,8 +18,10 @@ from urllib.parse import urlencode
 from anytree import Node, RenderTree, search
 from django.conf import settings
 from django.core.handlers.wsgi import WSGIRequest
-from django.urls import get_resolver, reverse
+from django.urls import reverse
 from django.urls.exceptions import NoReverseMatch
+
+from .utils import get_required_url_params
 
 
 # Configuration for logging URL resolution failures
@@ -37,28 +39,6 @@ def _should_log_url_failures():
         bool: True if URL failures should be logged, False otherwise.
     """
     return getattr(settings, "FLEX_MENUS", {}).get("log_url_failures", settings.DEBUG)
-
-
-def get_required_url_params(view_name):
-    """
-    Given a Django view_name (as used in reverse()), return the names of the
-    required URL parameters (e.g. ['pk'] or ['slug']).
-    """
-    resolver = get_resolver()
-    patterns = resolver.reverse_dict.getlist(view_name)
-    if not patterns:
-        raise NoReverseMatch(f"No URL pattern found for view name '{view_name}'.")
-
-    # reverse_dict.getlist(view_name) returns tuples like:
-    # [(possibilities, pattern_list, defaults, converters), ...]
-
-    params = set()
-    for possibilities, pattern_list, defaults, converters in patterns:
-        # The converters dict contains parameter names as keys
-        if converters:
-            params.update(converters.keys())
-
-    return sorted(params)
 
 
 # Sentinel value to distinguish between "no parent specified" and "explicitly no parent"
